@@ -244,15 +244,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                     nameKey="nama_desa"
                                     labelLine={false}
                                     label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        if (percent < 0.04) return null;
+                                        if ((percent ?? 0) < 0.04) return null;
                                         const RADIAN = Math.PI / 180;
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                        const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
+                                        const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+                                        const y = (cy ?? 0) + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
                                         return (
                                             <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
                                                 style={{ fontSize: 10, fontWeight: 700 }}>
-                                                {`${(percent * 100).toFixed(1)}%`}
+                                                {`${((percent ?? 0) * 100).toFixed(1)}%`}
                                             </text>
                                         );
                                     }}
@@ -321,15 +321,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                     dataKey="value"
                                     labelLine={false}
                                     label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        if (percent < 0.04) return null;
+                                        if ((percent ?? 0) < 0.04) return null;
                                         const RADIAN = Math.PI / 180;
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                        const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
+                                        const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+                                        const y = (cy ?? 0) + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
                                         return (
                                             <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
                                                 style={{ fontSize: 10, fontWeight: 700 }}>
-                                                {`${(percent * 100).toFixed(1)}%`}
+                                                {`${((percent ?? 0) * 100).toFixed(1)}%`}
                                             </text>
                                         );
                                     }}
@@ -408,15 +408,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                     dataKey="value"
                                     labelLine={false}
                                     label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        if (percent === 0) return null;
+                                        if ((percent ?? 0) === 0) return null;
                                         const RADIAN = Math.PI / 180;
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                        const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
+                                        const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+                                        const y = (cy ?? 0) + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
                                         return (
                                             <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
                                                 style={{ fontSize: 10, fontWeight: 700 }}>
-                                                {`${(percent * 100).toFixed(1)}%`}
+                                                {`${((percent ?? 0) * 100).toFixed(1)}%`}
                                             </text>
                                         );
                                     }}
