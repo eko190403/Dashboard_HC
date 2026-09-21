@@ -396,7 +396,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                             ))}
                         </select>
                     </div>
-                    <div style={{ height: 210, flex: 1 }}>
+                    <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
