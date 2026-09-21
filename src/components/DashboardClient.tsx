@@ -180,10 +180,10 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     ];
 
     return (
-        <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+        <div className="dashboard-wrapper" style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
             {/* ===== HEADER ===== */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+            <div className="dashboard-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
                 <div>
                     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>
                         Dashboard Domisili Tenaga Kerja
@@ -198,7 +198,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             </div>
 
             {/* ===== KPI CARDS ===== */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                 {kpiCards.map((card, i) => (
                     <div key={i} className="kpi-card" style={{ borderTop: `3px solid ${card.borderColor}` }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -209,6 +209,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                 width: 36, height: 36, borderRadius: 8,
                                 background: card.iconBg, color: card.iconColor,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0,
                             }}>
                                 {card.icon}
                             </div>
@@ -222,13 +223,13 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             </div>
 
             {/* ===== CHARTS ===== */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
 
                 {/* Pie Chart Top 10 Desa */}
                 <div className="card" style={{ padding: '22px 24px' }}>
                     <div style={{ marginBottom: 20 }}>
                         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Top 10 Desa — Jumlah TK Terbanyak</h3>
-                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Tidak termasuk kelompok "Desa Lainnya"</p>
+                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Tidak termasuk kelompok &quot;Desa Lainnya&quot;</p>
                     </div>
                     <div style={{ height: 210 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -300,7 +301,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                     </div>
                 </div>
 
-                {/* Pie Chart */}
+                {/* Pie Chart Distribusi Kecamatan */}
                 <div className="card" style={{ padding: '22px 24px' }}>
                     <div style={{ marginBottom: 16 }}>
                         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi per Kecamatan</h3>
@@ -379,7 +380,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
                 {/* Gender Pie Chart */}
                 <div className="card" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div className="gender-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Gender</h3>
                             <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Laki-laki vs Perempuan</p>
@@ -453,17 +454,20 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                 <div style={{
                     padding: '16px 20px',
                     borderBottom: '1px solid #dde3ed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
                 }}>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Detail Data Domisili</h3>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>
-                            {filteredVillages.length} dari {initialData.villageData.length} desa ditampilkan
-                        </p>
+                    {/* Title row */}
+                    <div className="table-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Detail Data Domisili</h3>
+                            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                                {filteredVillages.length} dari {initialData.villageData.length} desa ditampilkan
+                            </p>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Controls row */}
+                    <div className="table-controls" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                         {/* Search */}
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
                             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                             <input
                                 type="text"
@@ -471,7 +475,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                                 className="search-input"
-                                style={{ width: 220, paddingLeft: 32 }}
+                                style={{ paddingLeft: 32 }}
                             />
                         </div>
                         {/* Filter */}
@@ -503,10 +507,10 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                             <tr>
                                 <th style={{ width: 48 }}>No</th>
                                 <th>Nama Desa</th>
-                                <th>Kecamatan / District</th>
+                                <th className="col-hide-xs">Kecamatan / District</th>
                                 <th style={{ textAlign: 'right' }}>Jumlah TK</th>
-                                <th style={{ textAlign: 'right' }}>Laki-laki</th>
-                                <th style={{ textAlign: 'right' }}>Perempuan</th>
+                                <th style={{ textAlign: 'right' }} className="col-hide-xs">Laki-laki</th>
+                                <th style={{ textAlign: 'right' }} className="col-hide-xs">Perempuan</th>
                                 <th style={{ textAlign: 'right' }}>Persentase (%)</th>
                             </tr>
                         </thead>
@@ -535,15 +539,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                                     )}
                                                 </div>
                                             </td>
-                                            <td style={{ color: '#5a7184' }}>{row.kecamatan || '—'}</td>
+                                            <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kecamatan || '—'}</td>
                                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.jumlah_tk.toLocaleString('id-ID')}</td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td className="col-hide-xs" style={{ textAlign: 'right' }}>
                                                 <span style={{ color: '#1e5fd4', fontWeight: 600 }}>
                                                     {(row.jumlah_laki ?? 0).toLocaleString('id-ID')}
                                                 </span>
                                                 <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 3 }}>♂</span>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td className="col-hide-xs" style={{ textAlign: 'right' }}>
                                                 <span style={{ color: '#e11d48', fontWeight: 600 }}>
                                                     {(row.jumlah_perempuan ?? 0).toLocaleString('id-ID')}
                                                 </span>
@@ -575,14 +579,14 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
                 {/* Table Footer */}
                 {filteredVillages.length > 0 && (
-                    <div style={{
+                    <div className="table-footer" style={{
                         padding: '12px 20px',
                         borderTop: '1px solid #f1f5f9',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
                         fontSize: 12, color: '#94a3b8',
                     }}>
                         <span>Menampilkan <b style={{ color: '#1a2b4a' }}>{filteredVillages.length}</b> baris</span>
-                        <div style={{ display: 'flex', gap: 16 }}>
+                        <div className="table-footer-stats" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                             <span>Total TK: <b style={{ color: '#1a2b4a' }}>{filteredVillages.reduce((s, v) => s + v.jumlah_tk, 0).toLocaleString('id-ID')}</b></span>
                             <span>♂ Laki-laki: <b style={{ color: '#1e5fd4' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_laki ?? 0), 0).toLocaleString('id-ID')}</b></span>
                             <span>♀ Perempuan: <b style={{ color: '#e11d48' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_perempuan ?? 0), 0).toLocaleString('id-ID')}</b></span>
