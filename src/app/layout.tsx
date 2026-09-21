@@ -5,7 +5,12 @@ import Sidebar from '@/components/Sidebar';
 export const metadata: Metadata = {
   title: 'Dashboard Domisili TK | PG 2',
   description: 'Dashboard Mapping & Monitoring Domisili Tenaga Kerja PG 2',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
