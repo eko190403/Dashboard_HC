@@ -18,7 +18,7 @@ export async function GET() {
             throw uploadError;
         }
 
-        let query = supabase.from('employee_domisili').select('bagian, nama_desa');
+        let query = supabase.from('employee_domisili').select('bagian, nama_desa, kecamatan');
         if (latestUpload) {
             query = query.eq('upload_id', latestUpload.id);
         }
@@ -41,9 +41,14 @@ export async function GET() {
         data?.forEach((row) => {
             let bagian = row.bagian || 'Lainnya';
             let desa = row.nama_desa || 'Tidak Diketahui';
+            const kecamatan = (row.kecamatan || '').trim().toLowerCase();
             
-            // Hindari key yang terlalu rumit atau kotor
-            if (desa.startsWith('Format') || desa.startsWith('Lokasi')) {
+            // Jika nama_desa sama dengan kecamatan (fallback), masukkan ke Lainnya
+            if (
+                desa.toLowerCase() === kecamatan ||
+                desa.startsWith('Format') ||
+                desa.startsWith('Lokasi')
+            ) {
                 desa = 'Lainnya';
             }
 
