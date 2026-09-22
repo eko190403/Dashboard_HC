@@ -32,6 +32,7 @@ export default function TKChart() {
     const [allKomoditi, setAllKomoditi] = useState<string[]>([]);
     const [totalRows, setTotalRows] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [showLainnya, setShowLainnya] = useState(false);
 
     const fetchData = useCallback(async (komoditi: string) => {
         setLoading(true);
@@ -101,10 +102,24 @@ export default function TKChart() {
                         </button>
                     );
                 })}
-                {!loading && (
-                    <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>
-                        {totalDisplayed.toLocaleString('id-ID')} TK ditampilkan
-                    </span>
+                {!loading && dataTK.length > 0 && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 15 }}>
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                            color: '#5a7184', cursor: 'pointer', userSelect: 'none'
+                        }}>
+                            <input 
+                                type="checkbox" 
+                                checked={showLainnya}
+                                onChange={(e) => setShowLainnya(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            Tampilkan 'Lainnya'
+                        </label>
+                        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                            {totalDisplayed.toLocaleString('id-ID')} TK
+                        </span>
+                    </div>
                 )}
             </div>
 
@@ -163,15 +178,17 @@ export default function TKChart() {
                                     dataKey={desa}
                                     stackId="a"
                                     fill={DESA_COLORS[index % DESA_COLORS.length]}
-                                    radius={0}
+                                    radius={showLainnya ? 0 : [4, 4, 0, 0]}
                                 />
                             ))}
-                            <Bar
-                                dataKey="Lainnya"
-                                stackId="a"
-                                fill={DESA_COLORS[6]}
-                                radius={[4, 4, 0, 0]}
-                            />
+                            {showLainnya && (
+                                <Bar
+                                    dataKey="Lainnya"
+                                    stackId="a"
+                                    fill={DESA_COLORS[6]}
+                                    radius={[4, 4, 0, 0]}
+                                />
+                            )}
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
