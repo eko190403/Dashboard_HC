@@ -80,11 +80,11 @@ export async function GET(request: NextRequest) {
             desaTotalCounts[desa] = (desaTotalCounts[desa] || 0) + 1;
         });
 
-        // Top 5 desa terbanyak (bukan Lainnya)
+        // Top 10 desa terbanyak (bukan Lainnya)
         const topDesa = Object.entries(desaTotalCounts)
             .filter(([desa]) => desa !== 'Lainnya')
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
+            .slice(0, 10)
             .map(d => d[0]);
 
         // Format data untuk Recharts
