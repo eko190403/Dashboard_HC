@@ -25,7 +25,7 @@ export default function TKChart() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch('/api/chart-tk');
+        const res = await fetch(`/api/chart-tk?t=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Gagal mengambil data chart');
         const json = await res.json();
         if (json.data) {
