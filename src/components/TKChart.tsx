@@ -43,6 +43,8 @@ export default function TKChart() {
     // State untuk Modal Detail Lainnya
     const [modalData, setModalData] = useState<{ bagian: string; details: [string, number][] } | null>(null);
 
+    const isInitialLoad = React.useRef(true);
+
     const fetchData = useCallback(async (komoditi: string) => {
         setLoading(true);
         try {
@@ -56,6 +58,15 @@ export default function TKChart() {
                 setTotalRows(json.totalRows || 0);
                 if (json.komoditiSummary) {
                     setKomoditiSummary(json.komoditiSummary);
+                    // Auto-pilih komoditi terbanyak pada saat pertama kali load
+                    if (isInitialLoad.current && komoditi === 'Semua' && json.komoditiSummary.length > 0) {
+                        isInitialLoad.current = false;
+                        const biggest = json.komoditiSummary.reduce((prev: any, curr: any) =>
+                            curr.value > prev.value ? curr : prev
+                        );
+                        setSelectedKomoditi(biggest.name);
+                        return; // fetchData akan dipanggil lagi via useEffect
+                    }
                 }
             }
         } catch (err) {
