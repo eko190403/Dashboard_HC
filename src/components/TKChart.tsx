@@ -209,11 +209,11 @@ export default function TKChart() {
                                 <PieChart>
                                     <Pie data={komoditiSummary} dataKey="value" nameKey="name" cx="50%" cy="50%"
                                         innerRadius={65} outerRadius={85} paddingAngle={3} cursor="pointer"
-                                        onClick={(d) => setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}
+                                        onClick={(d: any) => d?.name && setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}
                                         labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                                        label={(entry) => {
+                                        label={(entry: any) => {
                                             if (entry.value < 20) return null; // Sembunyikan label untuk potongan sangat kecil
-                                            return `${entry.name} (${(entry.percent * 100).toFixed(1)}%)`;
+                                            return `${entry.name} (${((entry.percent || 0) * 100).toFixed(1)}%)`;
                                         }}>
                                         {komoditiSummary.map((entry, i) => (
                                             <Cell key={i}
@@ -224,7 +224,7 @@ export default function TKChart() {
                                         ))}
                                         <Label value={selectedKomoditi} position="center" style={{ fontSize: 15, fontWeight: 800, fill: '#0f172a' }} />
                                     </Pie>
-                                    <Tooltip formatter={(v: number) => [`${v.toLocaleString('id-ID')} TK`, 'Total']}
+                                    <Tooltip formatter={(v: any) => [`${Number(v || 0).toLocaleString('id-ID')} TK`, 'Total']}
                                         contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }} />
                                 </PieChart>
                             </ResponsiveContainer>
@@ -263,7 +263,7 @@ export default function TKChart() {
                                             <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                             <YAxis type="category" dataKey="desa" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={140} axisLine={false} tickLine={false} />
                                             <Tooltip content={<DesaTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                            <Bar dataKey="count" radius={[0, 8, 8, 0]} onClick={(data) => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: number) => v > 0 ? v : '' }}>
+                                            <Bar dataKey="count" radius={[0, 8, 8, 0]} onClick={(data) => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: any) => v > 0 ? v : '' }}>
                                                 {desaChartData.map((entry, i) => (
                                                     <Cell key={i} fill={entry.desa === 'Lainnya' ? '#cbd5e1' : komoditiColor} fillOpacity={entry.desa === 'Lainnya' ? 1 : 1 - (i * 0.07)} />
                                                 ))}
@@ -295,10 +295,10 @@ export default function TKChart() {
                                                 innerRadius={65} outerRadius={85} paddingAngle={2} cursor="pointer"
                                                 onClick={(d) => handleBagianClick(d)} stroke="none" cornerRadius={4}
                                                 labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                                                label={(entry) => {
+                                                label={(entry: any) => {
                                                     // Sembunyikan label jika angkanya kekecilan agar tidak bertumpuk
                                                     if (entry.total < 10) return null;
-                                                    return `${entry.bagian} (${(entry.percent * 100).toFixed(1)}%)`;
+                                                    return `${entry.bagian} (${((entry.percent || 0) * 100).toFixed(1)}%)`;
                                                 }}>
                                                 {bagianChartData.map((_, i) => (
                                                     <Cell key={i} fill={komoditiColor} fillOpacity={1 - (i * 0.05)} style={{ outline: 'none' }} />
