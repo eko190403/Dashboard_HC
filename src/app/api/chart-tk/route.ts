@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
         // Ambil data domisili terkini (misal: berdasarkan upload terakhir atau semua active karyawan)
