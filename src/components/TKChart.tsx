@@ -322,7 +322,9 @@ export default function TKChart() {
                                         cursor={{ fill: '#f8fafc' }}
                                         content={({ active, payload, label }) => {
                                             if (!active || !payload || payload.length === 0) return null;
-                                            const filtered = payload.filter(p => (p.value as number) > 0);
+                                            const filtered = payload
+                                                .filter(p => (p.value as number) > 0)
+                                                .sort((a, b) => (b.value as number) - (a.value as number));
                                             if (filtered.length === 0) return null;
                                             return (
                                                 <div style={{
