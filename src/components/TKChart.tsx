@@ -5,7 +5,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 
 // Palet warna yang solid & readable
 const DESA_COLORS = [
@@ -33,6 +33,9 @@ export default function TKChart() {
     const [totalRows, setTotalRows] = useState(0);
     const [loading, setLoading] = useState(true);
     const [showLainnya, setShowLainnya] = useState(false);
+    
+    // State untuk Modal Detail Lainnya
+    const [modalData, setModalData] = useState<{ bagian: string; details: [string, number][] } | null>(null);
 
     const fetchData = useCallback(async (komoditi: string) => {
         setLoading(true);
@@ -71,8 +74,21 @@ export default function TKChart() {
         return acc + topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0);
     }, 0);
 
+    const handleBarClick = (data: any, index: number, event: any) => {
+        if (!data || !data.payload || !data.payload.lainnyaDetails) return;
+        const detailsObj = data.payload.lainnyaDetails;
+        const detailsArray = Object.entries(detailsObj)
+            .map(([name, count]) => [name, count] as [string, number])
+            .sort((a, b) => b[1] - a[1]); // Urutkan dari terbanyak
+
+        setModalData({
+            bagian: data.payload.bagian,
+            details: detailsArray
+        });
+    };
+
     return (
-        <div style={{ width: '100%' }}>
+        <div style={{ width: '100%', position: 'relative' }}>
             {/* --- Tab Filter Komoditi --- */}
             <div style={{
                 display: 'flex', gap: 6, flexWrap: 'wrap',
@@ -187,10 +203,83 @@ export default function TKChart() {
                                     stackId="a"
                                     fill={DESA_COLORS[6]}
                                     radius={[4, 4, 0, 0]}
+                                    onClick={handleBarClick}
+                                    style={{ cursor: 'pointer' }}
                                 />
                             )}
                         </BarChart>
                     </ResponsiveContainer>
+                </div>
+            )}
+
+            {/* --- Modal Pop-up --- */}
+            {modalData && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: '#fff', width: 400, maxWidth: '90%', maxHeight: '80vh',
+                        borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                        display: 'flex', flexDirection: 'column', overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '16px 20px', borderBottom: '1px solid #e2e8f0',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            background: '#f8fafc'
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 16, color: '#1e293b' }}>Detail Desa "Lainnya"</h3>
+                                <p style={{ margin: 0, fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                                    Bagian: <strong>{modalData.bagian}</strong>
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setModalData(null)}
+                                style={{
+                                    background: 'transparent', border: 'none', cursor: 'pointer',
+                                    color: '#64748b', padding: 4, borderRadius: 4
+                                }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div style={{ padding: '0', overflowY: 'auto', flex: 1 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ background: '#f1f5f9', color: '#475569', textAlign: 'left' }}>
+                                        <th style={{ padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>Nama Desa</th>
+                                        <th style={{ padding: '10px 20px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>Jumlah TK</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {modalData.details.map(([desa, count], idx) => (
+                                        <tr key={desa} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                            <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', color: '#334155' }}>
+                                                {desa}
+                                            </td>
+                                            <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', textAlign: 'right', fontWeight: 600, color: '#1e5fd4' }}>
+                                                {count}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {modalData.details.length === 0 && (
+                                        <tr>
+                                            <td colSpan={2} style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>
+                                                Tidak ada data desa lainnya
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', textAlign: 'right' }}>
+                            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>
+                                Total: {modalData.details.reduce((sum, item) => sum + item[1], 0)} TK
+                            </span>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
