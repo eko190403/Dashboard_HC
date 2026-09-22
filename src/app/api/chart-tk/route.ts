@@ -28,20 +28,37 @@ export async function GET(request: NextRequest) {
             query = query.eq('upload_id', latestUpload.id);
         }
 
-        if (filterKomoditi && filterKomoditi !== 'Semua') {
-            query = query.eq('komoditi', filterKomoditi);
+        // Fetch all data (handling 1000 rows limit)
+        let allData: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+            const { data: pageData, error: pageError } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+            if (pageError) throw pageError;
+            if (pageData) allData.push(...pageData);
+            if (!pageData || pageData.length < pageSize) break;
+            page++;
         }
 
-        const { data, error } = await query;
+        // Hitung total per komoditi (untuk Pie Chart)
+        const komoditiCounts: Record<string, number> = {};
+        
+        allData.forEach((row) => {
+            const komoditi = row.komoditi || 'Lainnya';
+            komoditiCounts[komoditi] = (komoditiCounts[komoditi] || 0) + 1;
+        });
 
-        if (error) throw error;
+        // Data filter untuk Bar Chart
+        const filteredData = filterKomoditi && filterKomoditi !== 'Semua' 
+            ? allData.filter(row => (row.komoditi || 'Lainnya') === filterKomoditi)
+            : allData;
 
         // Hitung jumlah TK per bagian & desa
         const bagianDesaCounts: Record<string, Record<string, number>> = {};
         const desaTotalCounts: Record<string, number> = {};
-        const komoditiSet = new Set<string>();
+        const komoditiSet = new Set<string>(Object.keys(komoditiCounts));
 
-        data?.forEach((row) => {
+        filteredData.forEach((row) => {
             const bagian = row.bagian || 'Lainnya';
             const komoditi = row.komoditi || 'Lainnya';
             const kecamatan = (row.kecamatan || '').trim().toLowerCase();
@@ -96,7 +113,7 @@ export async function GET(request: NextRequest) {
             return a.bagian.localeCompare(b.bagian);
         });
 
-        // Daftar komoditi yang tersedia (untuk tab filter)
+        // Daftar komoditi yang tersedia (untuk Pie Chart / tab)
         const ORDER = ['Pine', 'Guava', 'Banana', 'QCPP', 'Planting', 'Agritech', 'Riset & R&D', 'Field & Support', 'Lainnya'];
         const allKomoditi = [...komoditiSet].sort((a, b) => {
             const ia = ORDER.indexOf(a);
@@ -107,11 +124,16 @@ export async function GET(request: NextRequest) {
             return ia - ib;
         });
 
+        const komoditiSummary = allKomoditi.map(name => ({
+            name,
+            value: komoditiCounts[name] || 0
+        }));
+
         return NextResponse.json({
             data: result,
             topDesa,
-            allKomoditi,
-            totalRows: data?.length ?? 0,
+            komoditiSummary,
+            totalRows: allData.length,
         });
 
     } catch (error: any) {
