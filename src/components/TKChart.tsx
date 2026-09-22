@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, Legend, ResponsiveContainer
+    Tooltip, Legend, ResponsiveContainer,
+    PieChart, Pie, Cell
 } from 'recharts';
 import { Loader2, X } from 'lucide-react';
 
@@ -13,23 +14,23 @@ const DESA_COLORS = [
     '#7c3aed', '#0891b2', '#cbd5e1'
 ];
 
-const KOMODITI_ICONS: Record<string, string> = {
-    'Pine': '🌿',
-    'Guava': '🍈',
-    'Banana': '🍌',
-    'QCPP': '📦',
-    'Planting': '🌱',
-    'Agritech': '🤖',
-    'Riset & R&D': '🔬',
-    'Field & Support': '🚜',
-    'Lainnya': '📋',
+const KOMODITI_COLORS: Record<string, string> = {
+    'Pine': '#f59e0b',
+    'Guava': '#10b981',
+    'Banana': '#eab308',
+    'QCPP': '#3b82f6',
+    'Planting': '#8b5cf6',
+    'Agritech': '#ec4899',
+    'Riset & R&D': '#06b6d4',
+    'Field & Support': '#64748b',
+    'Lainnya': '#cbd5e1'
 };
 
 export default function TKChart() {
     const [selectedKomoditi, setSelectedKomoditi] = useState<string>('Semua');
     const [dataTK, setDataTK] = useState<any[]>([]);
     const [topDesa, setTopDesa] = useState<string[]>([]);
-    const [allKomoditi, setAllKomoditi] = useState<string[]>([]);
+    const [komoditiSummary, setKomoditiSummary] = useState<any[]>([]);
     const [totalRows, setTotalRows] = useState(0);
     const [loading, setLoading] = useState(true);
     const [showLainnya, setShowLainnya] = useState(false);
@@ -48,8 +49,8 @@ export default function TKChart() {
                 setDataTK(json.data);
                 setTopDesa(json.topDesa || []);
                 setTotalRows(json.totalRows || 0);
-                if (json.allKomoditi?.length > 0) {
-                    setAllKomoditi(json.allKomoditi);
+                if (json.komoditiSummary) {
+                    setKomoditiSummary(json.komoditiSummary);
                 }
             }
         } catch (err) {
@@ -66,8 +67,6 @@ export default function TKChart() {
     const handleTabClick = (komoditi: string) => {
         setSelectedKomoditi(komoditi);
     };
-
-    const tabs = ['Semua', ...allKomoditi];
 
     // Hitung total TK dari data chart yang sedang ditampilkan
     const totalDisplayed = dataTK.reduce((acc, row) => {
@@ -88,38 +87,22 @@ export default function TKChart() {
     };
 
     return (
-        <div style={{ width: '100%', position: 'relative' }}>
-            {/* --- Tab Filter Komoditi --- */}
+        <div style={{ width: '100%', position: 'relative', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Header & Controls */}
             <div style={{
-                display: 'flex', gap: 6, flexWrap: 'wrap',
-                marginBottom: 20, alignItems: 'center'
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: '#f8fafc', padding: '12px 20px', borderRadius: 8, border: '1px solid #e2e8f0'
             }}>
-                {tabs.map(tab => {
-                    const isActive = selectedKomoditi === tab;
-                    return (
-                        <button
-                            key={tab}
-                            onClick={() => handleTabClick(tab)}
-                            style={{
-                                padding: '6px 14px',
-                                borderRadius: 20,
-                                border: isActive ? '2px solid #1e5fd4' : '1.5px solid #dde3ed',
-                                background: isActive ? '#1e5fd4' : '#fff',
-                                color: isActive ? '#fff' : '#5a7184',
-                                fontSize: 12,
-                                fontWeight: isActive ? 700 : 500,
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                display: 'flex', alignItems: 'center', gap: 5,
-                            }}
-                        >
-                            {tab !== 'Semua' && <span>{KOMODITI_ICONS[tab] || '📋'}</span>}
-                            {tab}
-                        </button>
-                    );
-                })}
+                <div>
+                    <h3 style={{ margin: 0, fontSize: 16, color: '#1e293b' }}>
+                        Distribusi Tenaga Kerja ({totalRows.toLocaleString('id-ID')} Total TK)
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        Klik pada Pie Chart untuk memfilter grafik Bar di bawahnya.
+                    </p>
+                </div>
                 {!loading && dataTK.length > 0 && (
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 15 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
                         <label style={{
                             display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
                             color: '#5a7184', cursor: 'pointer', userSelect: 'none'
@@ -130,85 +113,161 @@ export default function TKChart() {
                                 onChange={(e) => setShowLainnya(e.target.checked)}
                                 style={{ cursor: 'pointer' }}
                             />
-                            Tampilkan 'Lainnya'
+                            Tampilkan Desa 'Lainnya'
                         </label>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                            {totalDisplayed.toLocaleString('id-ID')} TK
-                        </span>
                     </div>
                 )}
             </div>
 
-            {/* --- Chart Area --- */}
             {loading ? (
-                <div style={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Loader2 size={28} color="#1e5fd4" style={{ animation: 'spin 1s linear infinite' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
+                    <Loader2 size={32} className="animate-spin mb-4" />
+                    Memuat data grafik...
                 </div>
-            ) : dataTK.length === 0 ? (
-                <div style={{
-                    height: 380, display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: 8
-                }}>
-                    <span style={{ fontSize: 32 }}>📭</span>
-                    <p style={{ margin: 0, fontSize: 13 }}>Belum ada data untuk komoditi ini.</p>
-                    <p style={{ margin: 0, fontSize: 12 }}>Silakan upload ulang file Excel dari dashboard.</p>
+            ) : dataTK.length === 0 && komoditiSummary.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
+                    <p>Belum ada data. Silakan upload file Excel dari dashboard.</p>
                 </div>
             ) : (
-                <div style={{ height: 380 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={dataTK} margin={{ top: 5, right: 20, left: 0, bottom: 70 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis
-                                dataKey="bagian"
-                                angle={-30}
-                                textAnchor="end"
-                                interval={0}
-                                tick={{ fontSize: 11, fill: '#5a7184' }}
-                                tickMargin={8}
-                            />
-                            <YAxis
-                                tick={{ fontSize: 11, fill: '#5a7184' }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <Tooltip
-                                cursor={{ fill: '#f1f5f9' }}
-                                contentStyle={{
-                                    borderRadius: 8,
-                                    border: '1px solid #dde3ed',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                                    fontSize: 12,
-                                }}
-                                formatter={(value: any, name: string) => [
-                                    `${Number(value).toLocaleString('id-ID')} TK`,
-                                    name
-                                ]}
-                            />
-                            <Legend
-                                verticalAlign="top"
-                                wrapperStyle={{ paddingBottom: 10, fontSize: 11 }}
-                            />
-                            {topDesa.map((desa, index) => (
-                                <Bar
-                                    key={desa}
-                                    dataKey={desa}
-                                    stackId="a"
-                                    fill={DESA_COLORS[index % DESA_COLORS.length]}
-                                    radius={showLainnya ? 0 : [4, 4, 0, 0]}
-                                />
-                            ))}
-                            {showLainnya && (
-                                <Bar
-                                    dataKey="Lainnya"
-                                    stackId="a"
-                                    fill={DESA_COLORS[6]}
-                                    radius={[4, 4, 0, 0]}
-                                    onClick={handleBarClick}
-                                    style={{ cursor: 'pointer' }}
-                                />
-                            )}
-                        </BarChart>
-                    </ResponsiveContainer>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                    {/* --- PIE CHART (Filter Komoditi) --- */}
+                    <div style={{
+                        flex: '1 1 300px', minWidth: 300, background: '#fff', 
+                        padding: 20, borderRadius: 12, border: '1px solid #e2e8f0',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+                    }}>
+                        <h4 style={{ margin: '0 0 10px 0', fontSize: 14, color: '#475569', textAlign: 'center' }}>
+                            Komoditi ({selectedKomoditi})
+                        </h4>
+                        <div style={{ width: '100%', height: 350 }}>
+                            <ResponsiveContainer>
+                                <PieChart>
+                                    <Pie
+                                        data={komoditiSummary}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={100}
+                                        paddingAngle={2}
+                                        cursor="pointer"
+                                        onClick={(data) => handleTabClick(data.name)}
+                                        stroke="none"
+                                    >
+                                        {komoditiSummary.map((entry, index) => {
+                                            const isActive = selectedKomoditi === 'Semua' || selectedKomoditi === entry.name;
+                                            return (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    fill={KOMODITI_COLORS[entry.name] || '#94a3b8'} 
+                                                    opacity={isActive ? 1 : 0.3}
+                                                    style={{ outline: 'none' }}
+                                                />
+                                            );
+                                        })}
+                                    </Pie>
+                                    <Tooltip 
+                                        formatter={(value: number) => [`${value.toLocaleString('id-ID')} TK`, 'Total']}
+                                        contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                    />
+                                    <Legend 
+                                        verticalAlign="bottom" 
+                                        wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+                                        onClick={(data) => handleTabClick(data.value)}
+                                        cursor="pointer"
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {selectedKomoditi !== 'Semua' && (
+                            <div style={{ textAlign: 'center', marginTop: 10 }}>
+                                <button
+                                    onClick={() => handleTabClick('Semua')}
+                                    style={{
+                                        padding: '6px 16px', borderRadius: 20, border: '1px solid #e2e8f0',
+                                        background: '#f8fafc', color: '#475569', fontSize: 12,
+                                        cursor: 'pointer', fontWeight: 600
+                                    }}
+                                >
+                                    Reset Filter (Semua)
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- BAR CHART (Detail Bagian & Desa) --- */}
+                    <div style={{
+                        flex: '3 1 600px', background: '#fff', 
+                        padding: 20, borderRadius: 12, border: '1px solid #e2e8f0',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 15 }}>
+                            <h4 style={{ margin: 0, fontSize: 14, color: '#475569' }}>
+                                Detail Bagian: {selectedKomoditi}
+                            </h4>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                                {totalDisplayed.toLocaleString('id-ID')} TK Ditampilkan
+                            </span>
+                        </div>
+                        
+                        <div style={{ width: '100%', height: 400 }}>
+                            <ResponsiveContainer>
+                                <BarChart data={dataTK} margin={{ top: 5, right: 20, left: 0, bottom: 70 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <XAxis
+                                        dataKey="bagian"
+                                        angle={-30}
+                                        textAnchor="end"
+                                        interval={0}
+                                        tick={{ fontSize: 11, fill: '#5a7184' }}
+                                        tickMargin={8}
+                                    />
+                                    <YAxis
+                                        tick={{ fontSize: 11, fill: '#5a7184' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: '#f1f5f9' }}
+                                        contentStyle={{
+                                            borderRadius: 8,
+                                            border: '1px solid #dde3ed',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                            fontSize: 12,
+                                        }}
+                                        formatter={(value: any, name: string) => [
+                                            `${Number(value).toLocaleString('id-ID')} TK`,
+                                            name
+                                        ]}
+                                    />
+                                    <Legend
+                                        verticalAlign="top"
+                                        wrapperStyle={{ paddingBottom: 10, fontSize: 11 }}
+                                    />
+                                    {topDesa.map((desa, index) => (
+                                        <Bar
+                                            key={desa}
+                                            dataKey={desa}
+                                            stackId="a"
+                                            fill={DESA_COLORS[index % DESA_COLORS.length]}
+                                            radius={showLainnya ? 0 : [4, 4, 0, 0]}
+                                        />
+                                    ))}
+                                    {showLainnya && (
+                                        <Bar
+                                            dataKey="Lainnya"
+                                            stackId="a"
+                                            fill={DESA_COLORS[6]}
+                                            radius={[4, 4, 0, 0]}
+                                            onClick={handleBarClick}
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                    )}
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
             )}
 
