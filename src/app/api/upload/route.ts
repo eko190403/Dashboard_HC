@@ -3,6 +3,34 @@ import * as xlsx from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { normalizeDesa } from '@/lib/normalizer';
 
+function getBagian(row: any): string {
+    const dep = String(row['Department'] || '').toLowerCase();
+    const subDep = String(row['SubDep'] || row['Subdivision'] || '').toLowerCase();
+    const section = String(row['Section'] || '').toLowerCase();
+    const costCenter = String(row['Cost Center'] || '').toLowerCase();
+    const jabatan = String(row['Jabatan/Posisi'] || row['Position'] || row['Jabatan'] || '').toLowerCase();
+    const allText = `${dep} ${subDep} ${section} ${costCenter} ${jabatan}`;
+
+    if (allText.includes('guava') || allText.includes('jambu')) {
+        if (allText.includes('harvest') || allText.includes('panen')) return 'Guava Harvest';
+        if (allText.includes('qc')) return 'Guava QC';
+        if (allText.includes('spraying') || allText.includes('field service')) return 'Guava Spraying';
+        return 'Planting';
+    }
+    
+    if (allText.includes('banana') || allText.includes('pisang')) {
+        if (allText.includes('qc')) return 'Banana QC';
+        if (allText.includes('harvest') || allText.includes('panen') || allText.includes('ph ') || allText.includes('packing')) return 'Banana Harvest';
+        if (allText.includes('support') || allText.includes('bambu') || allText.includes('pest')) return 'Banana Support';
+        return 'Banana Plantation';
+    }
+    
+    if (allText.includes('planting')) return 'Planting';
+    if (allText.includes('harvest')) return 'Guava Harvest';
+
+    return 'Lainnya';
+}
+
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
@@ -108,6 +136,7 @@ export async function POST(request: NextRequest) {
                 employment_status: status,
                 age: age,
                 birth_date: formattedBirthDate,
+                bagian: getBagian(row),
             });
         }
 
