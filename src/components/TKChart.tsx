@@ -3,21 +3,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, Legend, ResponsiveContainer,
+    Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, Label
 } from 'recharts';
-import { Loader2, X, Users, Trophy, Layers, MapPin } from 'lucide-react';
-
-// Palet warna modern dengan pasangan gradasi (untuk defs)
-const GRADIENTS = [
-    { id: 'color0', start: '#3b82f6', end: '#2563eb' }, // Blue
-    { id: 'color1', start: '#10b981', end: '#059669' }, // Emerald
-    { id: 'color2', start: '#f59e0b', end: '#d97706' }, // Amber
-    { id: 'color3', start: '#ec4899', end: '#db2777' }, // Pink
-    { id: 'color4', start: '#8b5cf6', end: '#7c3aed' }, // Purple
-    { id: 'color5', start: '#06b6d4', end: '#0891b2' }, // Cyan
-    { id: 'color6', start: '#cbd5e1', end: '#94a3b8' }, // Slate (Lainnya)
-];
+import { Loader2, X, Users, Trophy, Layers, MapPin, ChevronRight, ArrowLeft } from 'lucide-react';
 
 const KOMODITI_COLORS: Record<string, string> = {
     'Pine': '#f59e0b',
@@ -28,8 +17,10 @@ const KOMODITI_COLORS: Record<string, string> = {
     'Agritech': '#ec4899',
     'Riset & R&D': '#06b6d4',
     'Field & Support': '#64748b',
-    'Lainnya': '#cbd5e1'
+    'Lainnya': '#94a3b8'
 };
+
+const PIE_FALLBACK = '#94a3b8';
 
 export default function TKChart() {
     const [selectedKomoditi, setSelectedKomoditi] = useState<string>('Semua');
@@ -38,15 +29,18 @@ export default function TKChart() {
     const [komoditiSummary, setKomoditiSummary] = useState<any[]>([]);
     const [totalRows, setTotalRows] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [showLainnya, setShowLainnya] = useState(false);
-    
-    // State untuk Modal Detail Lainnya
+
+    // Drill-down state
+    const [selectedBagian, setSelectedBagian] = useState<any | null>(null);
+
+    // Modal state (desa lainnya)
     const [modalData, setModalData] = useState<{ bagian: string; details: [string, number][] } | null>(null);
 
     const isInitialLoad = React.useRef(true);
 
     const fetchData = useCallback(async (komoditi: string) => {
         setLoading(true);
+        setSelectedBagian(null); // Reset drill-down on komoditi change
         try {
             const params = komoditi !== 'Semua' ? `?komoditi=${encodeURIComponent(komoditi)}&t=${Date.now()}` : `?t=${Date.now()}`;
             const res = await fetch(`/api/chart-tk${params}`, { cache: 'no-store' });
@@ -58,14 +52,13 @@ export default function TKChart() {
                 setTotalRows(json.totalRows || 0);
                 if (json.komoditiSummary) {
                     setKomoditiSummary(json.komoditiSummary);
-                    // Auto-pilih komoditi terbanyak pada saat pertama kali load
                     if (isInitialLoad.current && komoditi === 'Semua' && json.komoditiSummary.length > 0) {
                         isInitialLoad.current = false;
                         const biggest = json.komoditiSummary.reduce((prev: any, curr: any) =>
                             curr.value > prev.value ? curr : prev
                         );
                         setSelectedKomoditi(biggest.name);
-                        return; // fetchData akan dipanggil lagi via useEffect
+                        return;
                     }
                 }
             }
@@ -80,369 +73,298 @@ export default function TKChart() {
         fetchData(selectedKomoditi);
     }, [selectedKomoditi, fetchData]);
 
-    // KPI Calculations
+    // KPI data
     const kpis = useMemo(() => {
         let totalTK = 0;
         let biggestBagian = { name: '-', count: 0 };
         const desaMap: Record<string, number> = {};
 
         dataTK.forEach(row => {
-            let rowTotal = 0;
-            topDesa.forEach(d => {
-                const val = row[d] || 0;
-                rowTotal += val;
-                desaMap[d] = (desaMap[d] || 0) + val;
-            });
-            rowTotal += (row['Lainnya'] || 0);
-            
+            let rowTotal = topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0);
             totalTK += rowTotal;
-            if (rowTotal > biggestBagian.count) {
-                biggestBagian = { name: row.bagian, count: rowTotal };
-            }
+            if (rowTotal > biggestBagian.count) biggestBagian = { name: row.bagian, count: rowTotal };
+            topDesa.forEach(d => { desaMap[d] = (desaMap[d] || 0) + (row[d] || 0); });
         });
 
-        let biggestDesa = { name: '-', count: 0 };
-        Object.entries(desaMap).forEach(([desa, count]) => {
-            if (count > biggestDesa.count) biggestDesa = { name: desa, count };
-        });
+        let biggestDesa = Object.entries(desaMap).reduce(
+            (best, [desa, count]) => count > best.count ? { name: desa, count } : best,
+            { name: '-', count: 0 }
+        );
 
         let biggestKomoditi = { name: '-', count: 0 };
         if (komoditiSummary.length > 0) {
-            const maxK = komoditiSummary.reduce((prev, current) => (prev.value > current.value) ? prev : current);
+            const maxK = komoditiSummary.reduce((prev, curr) => curr.value > prev.value ? curr : prev);
             biggestKomoditi = { name: maxK.name, count: maxK.value };
         }
 
         return { totalTK, biggestBagian, biggestDesa, biggestKomoditi };
     }, [dataTK, topDesa, komoditiSummary]);
 
-    const handleTabClick = (komoditi: string) => {
-        setSelectedKomoditi(komoditi);
+    // Level 1: Data for simple bagian bar chart (total per bagian)
+    const bagianChartData = useMemo(() => {
+        return dataTK
+            .map(row => ({
+                bagian: row.bagian,
+                total: topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0),
+                _raw: row,
+            }))
+            .sort((a, b) => b.total - a.total);
+    }, [dataTK, topDesa]);
+
+    // Level 2: Data for desa bar chart (when a bagian is selected)
+    const desaChartData = useMemo(() => {
+        if (!selectedBagian) return [];
+        const row = selectedBagian._raw;
+        return [
+            ...topDesa
+                .map(desa => ({ desa, count: row[desa] || 0 }))
+                .filter(d => d.count > 0)
+                .sort((a, b) => b.count - a.count),
+            ...(row['Lainnya'] > 0 ? [{ desa: 'Lainnya', count: row['Lainnya'] }] : [])
+        ];
+    }, [selectedBagian, topDesa]);
+
+    const komoditiColor = KOMODITI_COLORS[selectedKomoditi] || PIE_FALLBACK;
+
+    const handleBagianClick = (data: any) => {
+        if (!data || !data.activePayload) return;
+        const payload = data.activePayload[0]?.payload;
+        if (payload) setSelectedBagian(payload);
     };
 
-    const handleBarClick = (data: any) => {
-        if (!data || !data.payload || !data.payload.lainnyaDetails) return;
-        const detailsObj = data.payload.lainnyaDetails;
-        const detailsArray = Object.entries(detailsObj)
-            .map(([name, count]) => [name, count] as [string, number])
-            .sort((a, b) => b[1] - a[1]);
+    const handleDesaClick = (data: any) => {
+        if (!data || !data.activePayload) return;
+        const payload = data.activePayload[0]?.payload;
+        if (payload?.desa === 'Lainnya' && selectedBagian?._raw?.lainnyaDetails) {
+            const detailsArray = Object.entries(selectedBagian._raw.lainnyaDetails)
+                .map(([name, count]) => [name, count] as [string, number])
+                .sort((a, b) => b[1] - a[1]);
+            setModalData({ bagian: selectedBagian.bagian, details: detailsArray });
+        }
+    };
 
-        setModalData({
-            bagian: data.payload.bagian,
-            details: detailsArray
-        });
+    // Custom tooltips
+    const BagianTooltip = ({ active, payload, label }: any) => {
+        if (!active || !payload?.length) return null;
+        return (
+            <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{label}</p>
+                <p style={{ margin: 0, color: komoditiColor, fontWeight: 600 }}>{payload[0]?.value?.toLocaleString('id-ID')} TK</p>
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat detail desa →</p>
+            </div>
+        );
+    };
+
+    const DesaTooltip = ({ active, payload, label }: any) => {
+        if (!active || !payload?.length) return null;
+        const isLainnya = label === 'Lainnya';
+        return (
+            <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{label}</p>
+                <p style={{ margin: 0, color: '#1e5fd4', fontWeight: 600 }}>{payload[0]?.value?.toLocaleString('id-ID')} TK</p>
+                {isLainnya && <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat desa detail →</p>}
+            </div>
+        );
     };
 
     return (
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 20, fontFamily: "'Inter', sans-serif" }}>
-            
-            {/* --- KPI CARDS --- */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-                <div style={kpiCardStyle}>
-                    <div style={iconBoxStyle('#eff6ff', '#3b82f6')}><Users size={20} /></div>
-                    <div>
-                        <p style={kpiLabelStyle}>Total Tenaga Kerja</p>
-                        <h3 style={kpiValueStyle}>{kpis.totalTK.toLocaleString('id-ID')}</h3>
+
+            {/* KPI CARDS */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                {[
+                    { icon: <Users size={20} />, iconBg: '#eff6ff', iconColor: '#3b82f6', label: 'Total Tenaga Kerja', value: kpis.totalTK.toLocaleString('id-ID'), sub: '' },
+                    { icon: <Trophy size={20} />, iconBg: '#f0fdf4', iconColor: '#10b981', label: 'Komoditi Terbesar', value: kpis.biggestKomoditi.name, sub: `${kpis.biggestKomoditi.count} TK` },
+                    { icon: <Layers size={20} />, iconBg: '#fffbeb', iconColor: '#f59e0b', label: 'Bagian Dominan', value: kpis.biggestBagian.name, sub: `${kpis.biggestBagian.count} TK` },
+                    { icon: <MapPin size={20} />, iconBg: '#fdf2f8', iconColor: '#ec4899', label: 'Desa Terbanyak', value: kpis.biggestDesa.name, sub: `${kpis.biggestDesa.count} TK` },
+                ].map((kpi, i) => (
+                    <div key={i} style={{ background: '#fff', padding: '18px', borderRadius: 14, border: '1px solid #f1f5f9', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: kpi.iconBg, color: kpi.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {kpi.icon}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 12, color: '#64748b', fontWeight: 500 }}>{kpi.label}</p>
+                            <h3 style={{ margin: '3px 0 0', fontSize: 18, color: '#0f172a', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kpi.value}</h3>
+                            {kpi.sub && <p style={{ margin: '1px 0 0', fontSize: 12, color: '#94a3b8' }}>{kpi.sub}</p>}
+                        </div>
                     </div>
-                </div>
-                <div style={kpiCardStyle}>
-                    <div style={iconBoxStyle('#f0fdf4', '#10b981')}><Trophy size={20} /></div>
-                    <div>
-                        <p style={kpiLabelStyle}>Komoditi Terbesar</p>
-                        <h3 style={kpiValueStyle}>{kpis.biggestKomoditi.name} <span style={kpiSubStyle}>({kpis.biggestKomoditi.count})</span></h3>
-                    </div>
-                </div>
-                <div style={kpiCardStyle}>
-                    <div style={iconBoxStyle('#fffbeb', '#f59e0b')}><Layers size={20} /></div>
-                    <div>
-                        <p style={kpiLabelStyle}>Bagian Dominan</p>
-                        <h3 style={kpiValueStyle}>{kpis.biggestBagian.name} <span style={kpiSubStyle}>({kpis.biggestBagian.count})</span></h3>
-                    </div>
-                </div>
-                <div style={kpiCardStyle}>
-                    <div style={iconBoxStyle('#fdf2f8', '#ec4899')}><MapPin size={20} /></div>
-                    <div>
-                        <p style={kpiLabelStyle}>Desa Terbanyak</p>
-                        <h3 style={kpiValueStyle}>{kpis.biggestDesa.name} <span style={kpiSubStyle}>({kpis.biggestDesa.count})</span></h3>
-                    </div>
-                </div>
+                ))}
             </div>
 
             {loading ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
-                    <Loader2 size={32} className="animate-spin mb-4" />
-                    Memuat data grafik...
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b', gap: 12 }}>
+                    <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Memuat data...</span>
                 </div>
             ) : dataTK.length === 0 && komoditiSummary.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
                     <p>Belum ada data. Silakan upload file Excel dari dashboard.</p>
                 </div>
             ) : (
-                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                    {/* --- DONUT CHART (Filter Komoditi) --- */}
-                    <div style={{
-                        flex: '1 1 300px', minWidth: 300, background: '#fff', 
-                        padding: '24px 20px', borderRadius: 16, border: '1px solid #f1f5f9',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                            <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                                Distribusi Komoditi
-                            </h4>
-                        </div>
-                        
-                        <div style={{ width: '100%', height: 320, position: 'relative' }}>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+
+                    {/* DONUT CHART */}
+                    <div style={{ flex: '1 1 280px', minWidth: 280, background: '#fff', padding: '24px 16px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                        <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#1e293b', textAlign: 'center' }}>Distribusi Komoditi</h4>
+                        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>Klik irisan untuk filter</p>
+                        <div style={{ width: '100%', height: 280 }}>
                             <ResponsiveContainer>
                                 <PieChart>
-                                    <Pie
-                                        data={komoditiSummary}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={75}
-                                        outerRadius={105}
-                                        paddingAngle={4}
-                                        cursor="pointer"
-                                        onClick={(data) => handleTabClick(data.name)}
-                                        stroke="none"
-                                        cornerRadius={5}
-                                    >
-                                        {komoditiSummary.map((entry, index) => {
-                                            const isActive = selectedKomoditi === 'Semua' || selectedKomoditi === entry.name;
-                                            return (
-                                                <Cell 
-                                                    key={`cell-${index}`} 
-                                                    fill={KOMODITI_COLORS[entry.name] || '#94a3b8'} 
-                                                    opacity={isActive ? 1 : 0.25}
-                                                    style={{ transition: 'opacity 0.3s ease', outline: 'none' }}
-                                                />
-                                            );
-                                        })}
-                                        <Label 
-                                            value={selectedKomoditi} 
-                                            position="centerBottom" 
-                                            dy={-8}
-                                            style={{ fontSize: 20, fontWeight: 800, fill: '#1e293b' }} 
-                                        />
-                                        <Label 
-                                            value="Filter Aktif" 
-                                            position="centerTop" 
-                                            dy={15}
-                                            style={{ fontSize: 12, fill: '#94a3b8' }} 
-                                        />
+                                    <Pie data={komoditiSummary} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                                        innerRadius={70} outerRadius={100} paddingAngle={3} cursor="pointer"
+                                        onClick={(d) => setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}>
+                                        {komoditiSummary.map((entry, i) => (
+                                            <Cell key={i}
+                                                fill={KOMODITI_COLORS[entry.name] || PIE_FALLBACK}
+                                                opacity={selectedKomoditi === 'Semua' || selectedKomoditi === entry.name ? 1 : 0.2}
+                                                style={{ transition: 'opacity 0.3s', outline: 'none' }}
+                                            />
+                                        ))}
+                                        <Label value={selectedKomoditi} position="center" style={{ fontSize: 15, fontWeight: 800, fill: '#0f172a' }} />
                                     </Pie>
-                                    <Tooltip 
-                                        formatter={(value: number) => [`${value.toLocaleString('id-ID')} TK`, 'Total']}
-                                        contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
-                                    />
+                                    <Tooltip formatter={(v: number) => [`${v.toLocaleString('id-ID')} TK`, 'Total']}
+                                        contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
-                        {selectedKomoditi !== 'Semua' && (
-                            <div style={{ textAlign: 'center', marginTop: 'auto' }}>
-                                <button
-                                    onClick={() => handleTabClick('Semua')}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                            {komoditiSummary.map((k, i) => (
+                                <button key={i} onClick={() => setSelectedKomoditi(k.name)}
                                     style={{
-                                        padding: '8px 20px', borderRadius: 30, border: '1px solid #e2e8f0',
-                                        background: '#fff', color: '#0f172a', fontSize: 13,
-                                        cursor: 'pointer', fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseOver={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                    onMouseOut={(e) => e.currentTarget.style.background = '#fff'}
-                                >
-                                    Tampilkan Semua Komoditi
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                        background: selectedKomoditi === k.name ? `${KOMODITI_COLORS[k.name]}18` : 'transparent',
+                                        transition: 'background 0.2s'
+                                    }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: KOMODITI_COLORS[k.name] || PIE_FALLBACK, display: 'inline-block' }} />
+                                        <span style={{ fontSize: 13, color: '#334155', fontWeight: selectedKomoditi === k.name ? 700 : 400 }}>{k.name}</span>
+                                    </span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: selectedKomoditi === k.name ? (KOMODITI_COLORS[k.name] || '#1e5fd4') : '#64748b' }}>
+                                        {k.value.toLocaleString('id-ID')}
+                                    </span>
                                 </button>
-                            </div>
+                            ))}
+                        </div>
+                        {selectedKomoditi !== 'Semua' && (
+                            <button onClick={() => setSelectedKomoditi('Semua')}
+                                style={{ marginTop: 14, width: '100%', padding: '8px', borderRadius: 10, border: '1px dashed #cbd5e1', background: 'transparent', color: '#64748b', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+                                Tampilkan Semua Komoditi
+                            </button>
                         )}
                     </div>
 
-                    {/* --- HORIZONTAL BAR CHART (Detail Bagian & Desa) --- */}
-                    <div style={{
-                        flex: '3 1 600px', background: '#fff', 
-                        padding: '24px', borderRadius: 16, border: '1px solid #f1f5f9',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.03)'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                            <div>
-                                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                                    Detail Bagian & Wilayah Asal
-                                </h4>
-                                <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>
-                                    Data untuk filter: <strong style={{color:'#1e5fd4'}}>{selectedKomoditi}</strong>
-                                </p>
-                            </div>
-                            <label style={{
-                                display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
-                                color: '#475569', cursor: 'pointer', userSelect: 'none',
-                                background: '#f8fafc', padding: '6px 14px', borderRadius: 30, border: '1px solid #e2e8f0'
-                            }}>
-                                <input 
-                                    type="checkbox" 
-                                    checked={showLainnya}
-                                    onChange={(e) => setShowLainnya(e.target.checked)}
-                                    style={{ cursor: 'pointer', accentColor: '#1e5fd4' }}
-                                />
-                                Tampilkan Desa 'Lainnya'
-                            </label>
-                        </div>
-                        
-                        <div style={{ width: '100%', height: Math.max(400, dataTK.length * 40) }}>
-                            <ResponsiveContainer>
-                                <BarChart 
-                                    data={dataTK} 
-                                    layout="vertical"
-                                    margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
-                                    barSize={24}
-                                >
-                                    <defs>
-                                        {GRADIENTS.map((grad) => (
-                                            <linearGradient key={grad.id} id={grad.id} x1="0" y1="0" x2="1" y2="0">
-                                                <stop offset="0%" stopColor={grad.start} />
-                                                <stop offset="100%" stopColor={grad.end} />
-                                            </linearGradient>
-                                        ))}
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                                    <XAxis 
-                                        type="number" 
-                                        tick={{ fontSize: 12, fill: '#64748b' }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                    />
-                                    <YAxis 
-                                        type="category" 
-                                        dataKey="bagian" 
-                                        tick={{ fontSize: 12, fill: '#475569', fontWeight: 500 }}
-                                        width={160}
-                                        axisLine={false}
-                                        tickLine={false}
-                                    />
-                                    <Tooltip
-                                        cursor={{ fill: '#f8fafc' }}
-                                        content={({ active, payload, label }) => {
-                                            if (!active || !payload || payload.length === 0) return null;
-                                            const filtered = payload
-                                                .filter(p => (p.value as number) > 0)
-                                                .sort((a, b) => (b.value as number) - (a.value as number));
-                                            if (filtered.length === 0) return null;
-                                            return (
-                                                <div style={{
-                                                    background: '#fff', borderRadius: 12, padding: '12px 16px',
-                                                    boxShadow: '0 8px 24px rgba(0,0,0,0.1)', border: 'none',
-                                                    fontSize: 13, minWidth: 180
-                                                }}>
-                                                    <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>{label}</p>
-                                                    {filtered.map((p, i) => (
-                                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 4 }}>
-                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569' }}>
-                                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
-                                                                {p.name}
-                                                            </span>
-                                                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{(p.value as number).toLocaleString('id-ID')} TK</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            );
-                                        }}
-                                    />
-                                    <Legend
-                                        verticalAlign="top"
-                                        align="right"
-                                        wrapperStyle={{ paddingBottom: 20, fontSize: 12, fontWeight: 500 }}
-                                        iconType="circle"
-                                    />
-                                    {topDesa.map((desa, index) => (
-                                        <Bar
-                                            key={desa}
-                                            dataKey={desa}
-                                            stackId="a"
-                                            fill={`url(#color${index % 6})`}
-                                            radius={showLainnya ? 0 : [0, 6, 6, 0]}
-                                        />
-                                    ))}
-                                    {showLainnya && (
-                                        <Bar
-                                            dataKey="Lainnya"
-                                            stackId="a"
-                                            fill="url(#color6)"
-                                            radius={[0, 6, 6, 0]}
-                                            onClick={handleBarClick}
-                                            style={{ cursor: 'pointer' }}
-                                        />
-                                    )}
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                    {/* BAR CHART AREA */}
+                    <div style={{ flex: '3 1 500px', background: '#fff', padding: '24px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', minHeight: 400 }}>
+
+                        {/* Level 2: Desa breakdown for selected bagian */}
+                        {selectedBagian ? (
+                            <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                                    <button onClick={() => setSelectedBagian(null)}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', color: '#475569', fontSize: 13, fontWeight: 600 }}>
+                                        <ArrowLeft size={14} /> Kembali
+                                    </button>
+                                    <span style={{ color: '#94a3b8', fontSize: 13 }}>
+                                        {selectedKomoditi} <ChevronRight size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> <strong style={{ color: '#0f172a' }}>{selectedBagian.bagian}</strong>
+                                    </span>
+                                    <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8', background: '#f8fafc', padding: '4px 10px', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                                        {selectedBagian.total.toLocaleString('id-ID')} TK
+                                    </span>
+                                </div>
+                                <div style={{ height: Math.max(300, desaChartData.length * 44) }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={desaChartData} layout="vertical" margin={{ top: 0, right: 50, left: 0, bottom: 0 }}
+                                            barSize={26} onClick={handleDesaClick} style={{ cursor: 'pointer' }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} stroke="#f1f5f9" />
+                                            <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                            <YAxis type="category" dataKey="desa" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={140} axisLine={false} tickLine={false} />
+                                            <Tooltip content={<DesaTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                            <Bar dataKey="count" radius={[0, 8, 8, 0]} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: number) => v > 0 ? v : '' }}>
+                                                {desaChartData.map((entry, i) => (
+                                                    <Cell key={i} fill={entry.desa === 'Lainnya' ? '#cbd5e1' : komoditiColor} fillOpacity={entry.desa === 'Lainnya' ? 1 : 1 - (i * 0.07)} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                {selectedBagian._raw?.lainnyaDetails && Object.keys(selectedBagian._raw.lainnyaDetails).length > 0 && (
+                                    <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
+                                        💡 Klik bar <strong>Lainnya</strong> untuk melihat rincian desa-desanya
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            /* Level 1: Bagian totals */
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Distribusi per Bagian</h4>
+                                        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                                            Filter: <strong style={{ color: komoditiColor }}>{selectedKomoditi}</strong> · <span style={{ color: '#94a3b8' }}>Klik tiang untuk drill-down desa</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style={{ height: Math.max(300, bagianChartData.length * 44) }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={bagianChartData} layout="vertical"
+                                            margin={{ top: 0, right: 60, left: 0, bottom: 0 }}
+                                            barSize={28} onClick={handleBagianClick} style={{ cursor: 'pointer' }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} stroke="#f1f5f9" />
+                                            <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                            <YAxis type="category" dataKey="bagian" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={180} axisLine={false} tickLine={false} />
+                                            <Tooltip content={<BagianTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                            <Bar dataKey="total" radius={[0, 8, 8, 0]}
+                                                label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: number) => v > 0 ? v.toLocaleString('id-ID') : '' }}>
+                                                {bagianChartData.map((_, i) => (
+                                                    <Cell key={i} fill={komoditiColor} fillOpacity={1 - (i * 0.06)} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* --- Modal Pop-up --- */}
+            {/* MODAL Desa Lainnya */}
             {modalData && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    backdropFilter: 'blur(4px)'
-                }}>
-                    <div style={{
-                        background: '#fff', width: 440, maxWidth: '90%', maxHeight: '80vh',
-                        borderRadius: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-                        display: 'flex', flexDirection: 'column', overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '20px 24px', borderBottom: '1px solid #f1f5f9',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        }}>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ background: '#fff', width: 440, maxWidth: '90%', maxHeight: '80vh', borderRadius: 16, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Desa "Lainnya"</h3>
-                                <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#64748b' }}>
-                                    Detail sebaran pada bagian: <strong style={{color:'#1e5fd4'}}>{modalData.bagian}</strong>
-                                </p>
+                                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>Desa "Lainnya"</h3>
+                                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Bagian: <strong style={{ color: '#1e5fd4' }}>{modalData.bagian}</strong></p>
                             </div>
-                            <button 
-                                onClick={() => setModalData(null)}
-                                style={{
-                                    background: '#f1f5f9', border: 'none', cursor: 'pointer',
-                                    color: '#475569', padding: 8, borderRadius: '50%',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseOver={(e) => e.currentTarget.style.background = '#e2e8f0'}
-                                onMouseOut={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                            >
+                            <button onClick={() => setModalData(null)}
+                                style={{ background: '#f1f5f9', border: 'none', cursor: 'pointer', color: '#475569', padding: 8, borderRadius: '50%', display: 'flex' }}>
                                 <X size={18} />
                             </button>
                         </div>
-                        <div style={{ padding: '0', overflowY: 'auto', flex: 1 }}>
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                 <thead>
-                                    <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left', fontSize: 12, textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '12px 24px', fontWeight: 600 }}>Nama Desa</th>
-                                        <th style={{ padding: '12px 24px', fontWeight: 600, textAlign: 'right' }}>Jumlah TK</th>
+                                    <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: 11, textTransform: 'uppercase' }}>
+                                        <th style={{ padding: '12px 24px', textAlign: 'left', fontWeight: 600 }}>Nama Desa</th>
+                                        <th style={{ padding: '12px 24px', textAlign: 'right', fontWeight: 600 }}>Jumlah TK</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {modalData.details.map(([desa, count], idx) => (
-                                        <tr key={desa} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '12px 24px', color: '#334155', fontWeight: 500 }}>
-                                                {desa}
-                                            </td>
-                                            <td style={{ padding: '12px 24px', textAlign: 'right', fontWeight: 700, color: '#1e5fd4' }}>
-                                                {count}
-                                            </td>
+                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '11px 24px', color: '#334155', fontWeight: 500 }}>{desa}</td>
+                                            <td style={{ padding: '11px 24px', textAlign: 'right', fontWeight: 700, color: '#1e5fd4' }}>{count}</td>
                                         </tr>
                                     ))}
-                                    {modalData.details.length === 0 && (
-                                        <tr>
-                                            <td colSpan={2} style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>
-                                                Tidak ada data
-                                            </td>
-                                        </tr>
-                                    )}
                                 </tbody>
                             </table>
+                        </div>
+                        <div style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
+                            <span style={{ fontSize: 13, color: '#475569', fontWeight: 700 }}>
+                                Total: {modalData.details.reduce((s, item) => s + item[1], 0)} TK
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -450,17 +372,3 @@ export default function TKChart() {
         </div>
     );
 }
-
-// Inline Styles for KPI Cards
-const kpiCardStyle: React.CSSProperties = {
-    background: '#fff', padding: '20px', borderRadius: '16px',
-    border: '1px solid #f1f5f9', boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
-    display: 'flex', alignItems: 'center', gap: '16px'
-};
-const iconBoxStyle = (bg: string, color: string): React.CSSProperties => ({
-    width: 48, height: 48, borderRadius: 12, background: bg, color: color,
-    display: 'flex', alignItems: 'center', justifyContent: 'center'
-});
-const kpiLabelStyle: React.CSSProperties = { margin: 0, fontSize: 13, color: '#64748b', fontWeight: 500 };
-const kpiValueStyle: React.CSSProperties = { margin: '4px 0 0 0', fontSize: 20, color: '#0f172a', fontWeight: 800 };
-const kpiSubStyle: React.CSSProperties = { fontSize: 14, color: '#94a3b8', fontWeight: 500 };
