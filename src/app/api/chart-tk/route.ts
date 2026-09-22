@@ -10,7 +10,7 @@ export async function GET() {
         const { data: latestUpload, error: uploadError } = await supabase
             .from('upload_logs')
             .select('id')
-            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
             .limit(1)
             .single();
             
