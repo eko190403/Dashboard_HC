@@ -8,6 +8,7 @@ import {
 import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp } from 'lucide-react';
 import Link from 'next/link';
 import UploadModal from './UploadModal';
+import TKChart from './TKChart';
 
 interface DashboardData {
     totalHc: number;
@@ -446,6 +447,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* ===== TK CHART (STACKED BAR) ===== */}
+            <div className="card" style={{ padding: '22px 24px', marginBottom: 24 }}>
+                <div style={{ marginBottom: 16 }}>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Berdasarkan fungsi operasional Guava & Banana</p>
+                </div>
+                <TKChart />
             </div>
 
             {/* ===== DATA TABLE ===== */}
