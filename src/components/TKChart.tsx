@@ -309,14 +309,29 @@ export default function TKChart() {
                                     />
                                     <Tooltip
                                         cursor={{ fill: '#f8fafc' }}
-                                        contentStyle={{
-                                            borderRadius: 12, border: 'none',
-                                            boxShadow: '0 8px 24px rgba(0,0,0,0.1)', fontSize: 13,
+                                        content={({ active, payload, label }) => {
+                                            if (!active || !payload || payload.length === 0) return null;
+                                            const filtered = payload.filter(p => (p.value as number) > 0);
+                                            if (filtered.length === 0) return null;
+                                            return (
+                                                <div style={{
+                                                    background: '#fff', borderRadius: 12, padding: '12px 16px',
+                                                    boxShadow: '0 8px 24px rgba(0,0,0,0.1)', border: 'none',
+                                                    fontSize: 13, minWidth: 180
+                                                }}>
+                                                    <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>{label}</p>
+                                                    {filtered.map((p, i) => (
+                                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginTop: 4 }}>
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569' }}>
+                                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
+                                                                {p.name}
+                                                            </span>
+                                                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{(p.value as number).toLocaleString('id-ID')} TK</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
                                         }}
-                                        formatter={(value: any, name: string) => [
-                                            <span style={{ fontWeight: 600 }}>{Number(value).toLocaleString('id-ID')} TK</span>,
-                                            name
-                                        ]}
                                     />
                                     <Legend
                                         verticalAlign="top"
