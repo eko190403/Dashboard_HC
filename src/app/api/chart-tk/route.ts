@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
         // Format data untuk Recharts
         const result = Object.entries(bagianDesaCounts).map(([bagian, desaCounts]) => {
-            const rowData: any = { bagian };
+            const rowData: any = { bagian, lainnyaDetails: {} };
             topDesa.forEach(desa => rowData[desa] = 0);
             rowData['Lainnya'] = 0;
 
@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
                     rowData[desa] = count;
                 } else {
                     rowData['Lainnya'] += count;
+                    rowData.lainnyaDetails[desa] = (rowData.lainnyaDetails[desa] || 0) + count;
                 }
             });
 
