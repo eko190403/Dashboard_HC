@@ -106,12 +106,18 @@ export async function GET(request: NextRequest) {
         });
 
         // Urutkan: Pine wilayah numerik dulu
-        result.sort((a, b) => {
-            const numA = parseInt(a.bagian.replace(/\D/g, '')) || 999;
-            const numB = parseInt(b.bagian.replace(/\D/g, '')) || 999;
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return a.bagian.localeCompare(b.bagian);
-        });
+        const sortedResult = result
+            .filter(row => {
+                // Buang baris yang totalnya 0 (tidak ada TK untuk filter ini)
+                const total = topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0);
+                return total > 0;
+            })
+            .sort((a, b) => {
+                const numA = parseInt(a.bagian.replace(/\D/g, '')) || 999;
+                const numB = parseInt(b.bagian.replace(/\D/g, '')) || 999;
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return a.bagian.localeCompare(b.bagian);
+            });
 
         // Daftar komoditi yang tersedia (untuk Pie Chart / tab)
         const ORDER = ['Pine', 'Guava', 'Banana', 'QCPP', 'Planting', 'Agritech', 'Riset & R&D', 'Field & Support', 'Lainnya'];
@@ -130,7 +136,7 @@ export async function GET(request: NextRequest) {
         }));
 
         return NextResponse.json({
-            data: result,
+            data: sortedResult,
             topDesa,
             komoditiSummary,
             totalRows: allData.length,
