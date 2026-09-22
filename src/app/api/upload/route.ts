@@ -3,32 +3,69 @@ import * as xlsx from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { normalizeDesa } from '@/lib/normalizer';
 
-function getBagian(row: any): string {
-    const dep = String(row['Department'] || '').toLowerCase();
-    const subDep = String(row['SubDep'] || row['Subdivision'] || '').toLowerCase();
-    const section = String(row['Section'] || '').toLowerCase();
-    const costCenter = String(row['Cost Center'] || '').toLowerCase();
-    const jabatan = String(row['Jabatan/Posisi'] || row['Position'] || row['Jabatan'] || '').toLowerCase();
-    const allText = `${dep} ${subDep} ${section} ${costCenter} ${jabatan}`;
+function getKomoditiAndBagian(row: any): { komoditi: string; bagian: string } {
+    // Baca langsung dari kolom SAP yang sudah terstruktur
+    const subDepRaw = String(row['Sub Department Text'] || '').trim();
+    const depRaw = String(row['Department Text'] || '').trim();
+    const subDepLow = subDepRaw.toLowerCase();
+    const depLow = depRaw.toLowerCase();
 
-    if (allText.includes('guava') || allText.includes('jambu')) {
-        if (allText.includes('harvest') || allText.includes('panen')) return 'Guava Harvest';
-        if (allText.includes('qc')) return 'Guava QC';
-        if (allText.includes('spraying') || allText.includes('field service')) return 'Guava Spraying';
-        return 'Planting';
+    // --- PINE / NANAS (Wilayah) ---
+    const wilayahMatch = subDepRaw.match(/wilayah\s*(\d+)/i);
+    if (wilayahMatch) {
+        return { komoditi: 'Pine', bagian: `Wilayah ${wilayahMatch[1]}` };
     }
-    
-    if (allText.includes('banana') || allText.includes('pisang')) {
-        if (allText.includes('qc')) return 'Banana QC';
-        if (allText.includes('harvest') || allText.includes('panen') || allText.includes('ph ') || allText.includes('packing')) return 'Banana Harvest';
-        if (allText.includes('support') || allText.includes('bambu') || allText.includes('pest')) return 'Banana Support';
-        return 'Banana Plantation';
+    if (subDepLow.includes('process pine') || depLow.includes('process pine')) {
+        return { komoditi: 'Pine', bagian: 'Process Pine' };
     }
-    
-    if (allText.includes('planting')) return 'Planting';
-    if (allText.includes('harvest')) return 'Guava Harvest';
+    if (subDepLow.includes('harvesting & transport') || subDepLow.includes('harvesting & ph central')) {
+        return { komoditi: 'Pine', bagian: 'Harvesting & Transport' };
+    }
 
-    return 'Lainnya';
+    // --- GUAVA (Jambu) ---
+    if (subDepLow.includes('guava') || depLow.includes('guava')) {
+        if (subDepLow.includes('harvest')) return { komoditi: 'Guava', bagian: 'Guava Harvest' };
+        if (subDepLow.includes('qc')) return { komoditi: 'Guava', bagian: 'Guava QC' };
+        if (subDepLow.includes('spraying') || subDepLow.includes('field service')) return { komoditi: 'Guava', bagian: 'Guava Spraying' };
+        return { komoditi: 'Guava', bagian: 'Guava Plantation' };
+    }
+
+    // --- BANANA (Pisang) ---
+    if (subDepLow.includes('banana') || depLow.includes('banana')) {
+        if (subDepLow.includes('qc')) return { komoditi: 'Banana', bagian: 'Banana QC' };
+        if (subDepLow.includes('ph') || subDepLow.includes('packing')) return { komoditi: 'Banana', bagian: 'Banana Harvest & PH' };
+        if (subDepLow.includes('support')) return { komoditi: 'Banana', bagian: 'Banana Support' };
+        return { komoditi: 'Banana', bagian: 'Banana Plantation' };
+    }
+
+    // --- QCPP (QC Processed Pineapple) ---
+    if (subDepLow.includes('qc processed') || depLow.includes('qc processed') || subDepLow.includes('quality sistem') || subDepLow.includes('standarization')) {
+        return { komoditi: 'QCPP', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'QC Pineapple' };
+    }
+
+    // --- PLANTING ---
+    if (subDepLow.includes('planting')) {
+        return { komoditi: 'Planting', bagian: 'Planting' };
+    }
+
+    // --- AGRITECH ---
+    if (subDepLow.includes('agritech') || depLow.includes('agritech') || subDepLow.includes('greenhouse') || subDepLow.includes('precision agriculture') || subDepLow.includes('ndvi') || subDepLow.includes('system data')) {
+        return { komoditi: 'Agritech', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'Agritech' };
+    }
+
+    // --- RISET / R&D ---
+    if (subDepLow.includes('plant breeding') || subDepLow.includes('biofertilizer') || subDepLow.includes('durian') || subDepLow.includes('coconut') || subDepLow.includes('operation improvement') || depLow.includes('crop improvement') || depLow.includes('new crop') || depLow.includes('sustainable')) {
+        return { komoditi: 'Riset & R&D', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || depRaw };
+    }
+
+    // --- FIELD & SUPPORT ---
+    if (subDepLow.includes('field support') || subDepLow.includes('irrigation') || subDepLow.includes('land road') || subDepLow.includes('mtc') || subDepLow.includes('plant maintenance') || subDepLow.includes('warehouse') || subDepLow.includes('service')) {
+        return { komoditi: 'Field & Support', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'Field Support' };
+    }
+
+    // --- Fallback ---
+    const bagianFallback = subDepRaw.replace(/^SubDep\s*/i, '') || depRaw || 'Lainnya';
+    return { komoditi: 'Lainnya', bagian: bagianFallback };
 }
 
 export async function POST(request: NextRequest) {
@@ -127,6 +164,7 @@ export async function POST(request: NextRequest) {
             }
 
             // Collect individual employee data
+            const { komoditi, bagian } = getKomoditiAndBagian(row);
             employeeRecords.push({
                 nama_desa: normalizedDesa,
                 kecamatan: district,
@@ -136,7 +174,8 @@ export async function POST(request: NextRequest) {
                 employment_status: status,
                 age: age,
                 birth_date: formattedBirthDate,
-                bagian: getBagian(row),
+                komoditi,
+                bagian,
             });
         }
 
