@@ -127,7 +127,8 @@ export default function TKChart() {
     const komoditiColor = KOMODITI_COLORS[selectedKomoditi] || PIE_FALLBACK;
 
     const handleBagianClick = (data: any) => {
-        if (data && data.bagian) setSelectedBagian(data);
+        const item = data?.payload || data;
+        if (item && item.bagian) setSelectedBagian(item);
     };
 
     const handleDesaClick = (data: any) => {
@@ -200,28 +201,19 @@ export default function TKChart() {
                 <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
                     {/* DONUT CHART */}
-                    <div style={{ flex: '1 1 280px', minWidth: 280, background: '#fff', padding: '24px 16px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                    <div style={{ flex: '1 1 400px', minWidth: 320, background: '#fff', padding: '24px 16px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                         <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#1e293b', textAlign: 'center' }}>Distribusi Komoditi</h4>
                         <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>Klik irisan untuk filter</p>
                         <div style={{ width: '100%', height: 280 }}>
                             <ResponsiveContainer>
+                                <PieChart>
                                     <Pie data={komoditiSummary} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                                        innerRadius={70} outerRadius={110} paddingAngle={3} cursor="pointer"
+                                        innerRadius={65} outerRadius={85} paddingAngle={3} cursor="pointer"
                                         onClick={(d) => setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}
-                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value, name }) => {
-                                            const RADIAN = Math.PI / 180;
-                                            const radius = outerRadius * 1.3;
-                                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                                            
-                                            // Only show labels for slices that are big enough to matter, to prevent crowding
-                                            if (value < 20) return null;
-
-                                            return (
-                                                <text x={x} y={y} fill="#475569" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12" fontWeight="600">
-                                                    {name} ({value})
-                                                </text>
-                                            );
+                                        labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                                        label={(entry) => {
+                                            if (entry.value < 20) return null; // Sembunyikan label untuk potongan sangat kecil
+                                            return `${entry.name} (${(entry.percent * 100).toFixed(1)}%)`;
                                         }}>
                                         {komoditiSummary.map((entry, i) => (
                                             <Cell key={i}
@@ -246,7 +238,7 @@ export default function TKChart() {
                     </div>
 
                     {/* BAR CHART AREA */}
-                    <div style={{ flex: '3 1 500px', background: '#fff', padding: '24px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', minHeight: 400 }}>
+                    <div style={{ flex: '1 1 400px', background: '#fff', padding: '24px', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', minHeight: 400 }}>
 
                         {/* Level 2: Desa breakdown for selected bagian */}
                         {selectedBagian ? (
@@ -292,26 +284,29 @@ export default function TKChart() {
                                     <div>
                                         <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Distribusi per Bagian</h4>
                                         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                                            Filter: <strong style={{ color: komoditiColor }}>{selectedKomoditi}</strong> · <span style={{ color: '#94a3b8' }}>Klik tiang untuk drill-down desa</span>
+                                            Filter: <strong style={{ color: komoditiColor }}>{selectedKomoditi}</strong> · <span style={{ color: '#94a3b8' }}>Klik irisan untuk drill-down desa</span>
                                         </p>
                                     </div>
                                 </div>
-                                <div style={{ height: Math.max(300, bagianChartData.length * 44) }}>
+                                <div style={{ height: 280 }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={bagianChartData} layout="vertical"
-                                            margin={{ top: 0, right: 60, left: 0, bottom: 0 }}
-                                            barSize={28}>
-                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} stroke="#f1f5f9" />
-                                            <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                            <YAxis type="category" dataKey="bagian" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={180} axisLine={false} tickLine={false} />
-                                            <Tooltip content={<BagianTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                            <Bar dataKey="total" radius={[0, 8, 8, 0]} onClick={(data) => handleBagianClick(data)} style={{ cursor: 'pointer' }}
-                                                label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: number) => v > 0 ? v.toLocaleString('id-ID') : '' }}>
+                                        <PieChart>
+                                            <Pie data={bagianChartData} dataKey="total" nameKey="bagian" cx="50%" cy="50%"
+                                                innerRadius={65} outerRadius={85} paddingAngle={2} cursor="pointer"
+                                                onClick={(d) => handleBagianClick(d)} stroke="none" cornerRadius={4}
+                                                labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                                                label={(entry) => {
+                                                    // Sembunyikan label jika angkanya kekecilan agar tidak bertumpuk
+                                                    if (entry.total < 10) return null;
+                                                    return `${entry.bagian} (${(entry.percent * 100).toFixed(1)}%)`;
+                                                }}>
                                                 {bagianChartData.map((_, i) => (
-                                                    <Cell key={i} fill={komoditiColor} fillOpacity={1 - (i * 0.06)} />
+                                                    <Cell key={i} fill={komoditiColor} fillOpacity={1 - (i * 0.05)} style={{ outline: 'none' }} />
                                                 ))}
-                                            </Bar>
-                                        </BarChart>
+                                                <Label value="Pilih Bagian" position="center" style={{ fontSize: 14, fontWeight: 700, fill: '#64748b' }} />
+                                            </Pie>
+                                            <Tooltip content={<BagianTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                        </PieChart>
                                     </ResponsiveContainer>
                                 </div>
                             </>
