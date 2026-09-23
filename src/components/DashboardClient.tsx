@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
@@ -44,8 +45,10 @@ const CustomTooltipBar = ({ active, payload, label }: any) => {
     return null;
 };
 
-const CustomTooltipPie = ({ active, payload }: any) => {
+const CustomTooltipPie = ({ active, payload, totalHc }: any) => {
     if (active && payload && payload.length) {
+        const val = payload[0].value;
+        const pctText = totalHc ? `${((val / totalHc) * 100).toFixed(2)}%` : (payload[0].payload.percent !== undefined ? `${(payload[0].payload.percent * 100).toFixed(2)}%` : '');
         return (
             <div style={{
                 background: '#fff', border: '1px solid #dde3ed',
@@ -54,8 +57,8 @@ const CustomTooltipPie = ({ active, payload }: any) => {
                 fontSize: 12,
             }}>
                 <div style={{ fontWeight: 600, color: '#1a2b4a', marginBottom: 4 }}>{payload[0].name}</div>
-                <div style={{ color: '#5a7184' }}>{payload[0].value.toLocaleString('id-ID')} TK</div>
-                <div style={{ color: '#94a3b8', fontSize: 11 }}>{payload[0].payload.percent !== undefined ? `${(payload[0].payload.percent * 100).toFixed(2)}%` : ''}</div>
+                <div style={{ color: '#5a7184' }}>{val.toLocaleString('id-ID')} TK</div>
+                {pctText && <div style={{ color: '#94a3b8', fontSize: 11 }}>{pctText}</div>}
             </div>
         );
     }
@@ -63,6 +66,7 @@ const CustomTooltipPie = ({ active, payload }: any) => {
 };
 
 export default function DashboardClient({ initialData }: { initialData: DashboardData | null }) {
+    const router = useRouter();
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
     const [justUpdated, setJustUpdated] = useState(false);
@@ -70,9 +74,27 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
+    const [ageData, setAgeData] = useState<any[]>([]);
+    const [ageUnknown, setAgeUnknown] = useState(0);
 
     useEffect(() => {
         setAuthUser(getUser());
+    }, []);
+
+    useEffect(() => {
+        const fetchAgeData = async () => {
+            try {
+                const res = await fetch('/api/age-demographics');
+                if (res.ok) {
+                    const json = await res.json();
+                    setAgeData(json.data || []);
+                    setAgeUnknown(json.unknown || 0);
+                }
+            } catch (err) {
+                console.error("Failed to fetch age data", err);
+            }
+        };
+        fetchAgeData();
     }, []);
 
     if (!initialData) {
@@ -256,7 +278,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             </div>
 
             {/* ===== CHARTS ===== */}
-            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20, marginBottom: 24 }}>
 
                 {/* Pie Chart Top 10 Desa */}
                 <div className="card" style={{ padding: '22px 24px' }}>
@@ -277,8 +299,9 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                     dataKey="jumlah_tk"
                                     nameKey="nama_desa"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        if ((percent ?? 0) < 0.04) return null;
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+                                        const actualPercent = (value / initialData.totalHc);
+                                        if (actualPercent < 0.04) return null;
                                         const RADIAN = Math.PI / 180;
                                         const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
                                         const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
@@ -286,7 +309,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         return (
                                             <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
                                                 style={{ fontSize: 10, fontWeight: 700 }}>
-                                                {`${((percent ?? 0) * 100).toFixed(1)}%`}
+                                                {`${(actualPercent * 100).toFixed(2)}%`}
                                             </text>
                                         );
                                     }}
@@ -295,7 +318,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         <Cell key={`cell-${index}`} fill={DISTRICT_COLORS[index % DISTRICT_COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip content={<CustomTooltipPie />} />
+                                <Tooltip content={<CustomTooltipPie totalHc={initialData.totalHc} />} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -354,8 +377,9 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                     paddingAngle={2}
                                     dataKey="value"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        if ((percent ?? 0) < 0.04) return null;
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+                                        const actualPercent = (value / initialData.totalHc);
+                                        if (actualPercent < 0.04) return null;
                                         const RADIAN = Math.PI / 180;
                                         const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
                                         const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
@@ -363,7 +387,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         return (
                                             <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
                                                 style={{ fontSize: 10, fontWeight: 700 }}>
-                                                {`${((percent ?? 0) * 100).toFixed(1)}%`}
+                                                {`${(actualPercent * 100).toFixed(2)}%`}
                                             </text>
                                         );
                                     }}
@@ -377,7 +401,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         style={{ fontSize: 13, fontWeight: 700, fill: '#1a2b4a' }}
                                     />
                                 </Pie>
-                                <Tooltip content={<CustomTooltipPie />} />
+                                <Tooltip content={<CustomTooltipPie totalHc={initialData.totalHc} />} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -476,6 +500,85 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <div style={{ width: 10, height: 10, borderRadius: 2, background: '#e11d48' }} />
                             <span style={{ fontSize: 12, color: '#5a7184' }}>Perempuan ({genderData[1].value})</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Age Pie Chart */}
+                <div className="card" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column' }}>
+                    <div className="gender-header" style={{ marginBottom: 16 }}>
+                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Demografi Usia</h3>
+                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Distribusi usia produktif</p>
+                    </div>
+                    <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
+                        {ageData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={ageData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={55}
+                                        outerRadius={85}
+                                        paddingAngle={2}
+                                        dataKey="value"
+                                        labelLine={false}
+                                        onClick={(entry) => {
+                                            if (entry?.name) router.push(`/age-detail?range=${entry.name}`);
+                                        }}
+                                        style={{ cursor: 'pointer' }}
+                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                            if ((percent ?? 0) === 0) return null;
+                                            const RADIAN = Math.PI / 180;
+                                            const radius = (innerRadius ?? 0) + ((outerRadius ?? 0) - (innerRadius ?? 0)) * 0.55;
+                                            const x = (cx ?? 0) + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+                                            const y = (cy ?? 0) + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
+                                            return (
+                                                <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
+                                                    style={{ fontSize: 10, fontWeight: 700 }}>
+                                                    {`${((percent ?? 0) * 100).toFixed(1)}%`}
+                                                </text>
+                                            );
+                                        }}
+                                    >
+                                        {ageData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip content={<CustomTooltipPie />} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                <span style={{ fontSize: 12, color: '#94a3b8' }}>Memuat data usia...</span>
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ marginTop: 'auto' }}>
+                        <div>
+                            {ageData.map((d) => (
+                                <div key={d.name}
+                                    onClick={() => router.push(`/age-detail?range=${d.name}`)}
+                                    style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', borderRadius: 4, transition: 'background 0.15s' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.fill }} />
+                                        <span style={{ fontSize: 12, color: '#1a2b4a', fontWeight: 500 }}>{d.name} Tahun</span>
+                                    </div>
+                                    <span style={{ fontSize: 12, color: '#1e5fd4', fontWeight: 600 }}>{d.value.toLocaleString('id-ID')} TK</span>
+                                </div>
+                            ))}
+                            {ageUnknown > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8' }} />
+                                        <span style={{ fontSize: 12, color: '#1a2b4a', fontWeight: 500 }}>Tidak Diketahui</span>
+                                    </div>
+                                    <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{ageUnknown.toLocaleString('id-ID')} TK</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
