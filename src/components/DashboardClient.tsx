@@ -11,6 +11,7 @@ import Link from 'next/link';
 import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
+import MandorSummary from './MandorSummary';
 import { getUser, type User } from '@/lib/auth';
 
 interface DashboardData {
@@ -488,7 +489,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         style={{ fontSize: 13, fontWeight: 700, fill: '#1a2b4a' }}
                                     />
                                 </Pie>
-                                <Tooltip content={<CustomTooltipPie />} />
+                                <Tooltip content={<CustomTooltipPie totalHc={genderData[0].value + genderData[1].value} />} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -545,7 +546,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                             <Cell key={`cell-${index}`} fill={entry.fill} />
                                         ))}
                                     </Pie>
-                                    <Tooltip content={<CustomTooltipPie />} />
+                                    <Tooltip content={<CustomTooltipPie totalHc={initialData.totalHc} />} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
@@ -584,13 +585,18 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                 </div>
             </div>
 
-            {/* ===== TK CHART (STACKED BAR) ===== */}
-            <div className="card" style={{ padding: '22px 24px', marginBottom: 24 }}>
-                <div style={{ marginBottom: 16 }}>
-                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
-                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
+            {/* ===== TK CHART & MANDOR SUMMARY ===== */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
+                <div className="card" style={{ padding: '22px 24px' }}>
+                    <div style={{ marginBottom: 16 }}>
+                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
+                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
+                    </div>
+                    <TKChart />
                 </div>
-                <TKChart />
+                
+                {/* Mandor Summary */}
+                <MandorSummary />
             </div>
 
             {/* ===== DATA TABLE ===== */}
