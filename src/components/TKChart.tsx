@@ -6,7 +6,8 @@ import {
     Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, Label
 } from 'recharts';
-import { Loader2, X, Users, Trophy, Layers, MapPin, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Loader2, X, Users, Trophy, Layers, MapPin, ChevronRight, ArrowLeft, ExternalLink } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 const KOMODITI_COLORS: Record<string, string> = {
     'Pine': '#f59e0b',
@@ -37,6 +38,7 @@ export default function TKChart() {
     const [modalData, setModalData] = useState<{ bagian: string; details: [string, number][] } | null>(null);
 
     const isInitialLoad = React.useRef(true);
+    const router = useRouter();
 
     const fetchData = useCallback(async (komoditi: string) => {
         setLoading(true);
@@ -138,6 +140,13 @@ export default function TKChart() {
                 .sort((a, b) => b[1] - a[1]);
             setModalData({ bagian: selectedBagian.bagian, details: detailsArray });
         }
+    };
+
+    const goToDetailPage = () => {
+        const params = new URLSearchParams();
+        if (selectedKomoditi !== 'Semua') params.append('komoditi', selectedKomoditi);
+        if (selectedBagian) params.append('bagian', selectedBagian.bagian);
+        router.push(`/tk-detail?${params.toString()}`);
     };
 
     // Custom tooltips
@@ -251,9 +260,15 @@ export default function TKChart() {
                                     <span style={{ color: '#94a3b8', fontSize: 13 }}>
                                         {selectedKomoditi} <ChevronRight size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> <strong style={{ color: '#0f172a' }}>{selectedBagian.bagian}</strong>
                                     </span>
-                                    <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8', background: '#f8fafc', padding: '4px 10px', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                                        {selectedBagian.total.toLocaleString('id-ID')} TK
-                                    </span>
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                                        <button onClick={goToDetailPage}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, border: `1px solid ${komoditiColor}`, background: '#fff', color: komoditiColor, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                            <ExternalLink size={13} /> Lihat Detail TK
+                                        </button>
+                                        <span style={{ fontSize: 12, color: '#94a3b8', background: '#f8fafc', padding: '4px 10px', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                                            {selectedBagian.total.toLocaleString('id-ID')} TK
+                                        </span>
+                                    </div>
                                 </div>
                                 <div style={{ height: Math.max(300, desaChartData.length * 44) }}>
                                     <ResponsiveContainer width="100%" height="100%">
@@ -287,6 +302,12 @@ export default function TKChart() {
                                             Filter: <strong style={{ color: komoditiColor }}>{selectedKomoditi}</strong> · <span style={{ color: '#94a3b8' }}>Klik irisan untuk drill-down desa</span>
                                         </p>
                                     </div>
+                                    {selectedKomoditi !== 'Semua' && (
+                                        <button onClick={goToDetailPage}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, border: `1px solid ${komoditiColor}`, background: '#fff', color: komoditiColor, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                            <ExternalLink size={14} /> Lihat Detail TK ({selectedKomoditi})
+                                        </button>
+                                    )}
                                 </div>
                                 <div style={{ height: 280 }}>
                                     <ResponsiveContainer width="100%" height="100%">

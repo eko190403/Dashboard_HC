@@ -1,11 +1,21 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, History, Building2, Users, ChevronRight } from 'lucide-react';
+import { getUser, type User } from '@/lib/auth';
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const [user, setUser] = useState<User | null>(null);
+
+    useEffect(() => {
+        setUser(getUser());
+    }, [pathname]);
+
+    // Hide sidebar completely on login page
+    if (pathname === '/login') return null;
 
     const navLinks = [
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -94,16 +104,16 @@ export default function Sidebar() {
                     <div style={{
                         width: 32, height: 32,
                         borderRadius: '50%',
-                        background: '#e9f0fc',
+                        background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#1e5fd4',
+                        color: '#fff', fontSize: 12, fontWeight: 700,
                         flexShrink: 0,
                     }}>
-                        <Users size={15} />
+                        {user?.initials ?? <Users size={15} />}
                     </div>
-                    <div>
-                        <div style={{ fontWeight: 600, fontSize: 12, color: '#1a2b4a' }}>Admin HR</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8' }}>People Partner</div>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 12, color: '#1a2b4a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name ?? 'Admin HR'}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8' }}>{user?.role ?? 'People Partner'}</div>
                     </div>
                 </div>
             </aside>
@@ -128,11 +138,11 @@ export default function Sidebar() {
                 <div style={{
                     width: 32, height: 32,
                     borderRadius: '50%',
-                    background: '#e9f0fc',
+                    background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#1e5fd4',
+                    color: '#fff', fontSize: 12, fontWeight: 700,
                 }}>
-                    <Users size={15} />
+                    {user?.initials ?? <Users size={15} />}
                 </div>
             </div>
 

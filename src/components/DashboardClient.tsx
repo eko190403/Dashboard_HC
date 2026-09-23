@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
 } from 'recharts';
-import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp } from 'lucide-react';
+import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import Link from 'next/link';
 import UploadModal from './UploadModal';
+import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
+import { getUser, type User } from '@/lib/auth';
 
 interface DashboardData {
     totalHc: number;
@@ -62,9 +64,16 @@ const CustomTooltipPie = ({ active, payload }: any) => {
 
 export default function DashboardClient({ initialData }: { initialData: DashboardData | null }) {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
+    const [justUpdated, setJustUpdated] = useState(false);
+    const [authUser, setAuthUser] = useState<User | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
+
+    useEffect(() => {
+        setAuthUser(getUser());
+    }, []);
 
     if (!initialData) {
         return (
@@ -186,22 +195,45 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             {/* ===== HEADER ===== */}
             <div className="dashboard-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>
-                        Dashboard Domisili Tenaga Kerja
-                    </h1>
+                    {authUser && (
+                        <p style={{ margin: '0 0 4px', fontSize: 13, color: '#94a3b8' }}>
+                            👋 Selamat datang, <strong style={{ color: '#1e5fd4' }}>{authUser.name}</strong>
+                        </p>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>
+                            Dashboard Domisili Tenaga Kerja
+                        </h1>
+                        {justUpdated && (
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                background: '#d1fae5', color: '#0ea573',
+                                fontSize: 11, fontWeight: 700, padding: '3px 10px',
+                                borderRadius: 20, letterSpacing: '0.02em',
+                                animation: 'fadeSlideUp 0.3s ease both',
+                            }}>
+                                ✓ Baru Diperbarui
+                            </span>
+                        )}
+                    </div>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5a7184' }}>
-                        PG 2 Estate — Data per 21 September 2026
+                        PG 2 Estate — Data per {new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                 </div>
-                <button className="btn-primary" onClick={() => setIsUploadOpen(true)}>
-                    <ArrowUp size={14} /> Update Data
-                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="btn-secondary" onClick={() => setIsUploadMandorOpen(true)} style={{ color: '#0ea573', borderColor: '#0ea573' }}>
+                        <FileSpreadsheet size={14} /> Master Mandor
+                    </button>
+                    <button className="btn-primary" onClick={() => setIsUploadOpen(true)}>
+                        <ArrowUp size={14} /> Update Data
+                    </button>
+                </div>
             </div>
 
             {/* ===== KPI CARDS ===== */}
             <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                 {kpiCards.map((card, i) => (
-                    <div key={i} className="kpi-card" style={{ borderTop: `3px solid ${card.borderColor}` }}>
+                    <div key={i} className="kpi-card animate-in" style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms` }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                             <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#5a7184', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                 {card.label}
@@ -453,7 +485,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             <div className="card" style={{ padding: '22px 24px', marginBottom: 24 }}>
                 <div style={{ marginBottom: 16 }}>
                     <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
-                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Berdasarkan fungsi operasional Guava & Banana</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
                 </div>
                 <TKChart />
             </div>
@@ -564,14 +596,20 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                                 <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 3 }}>♀</span>
                                             </td>
                                             <td style={{ textAlign: 'right' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
-                                                    <span style={{ color: '#1a2b4a', fontWeight: 500, minWidth: 40 }}>
-                                                        {Number(row.persentase).toFixed(2)}%
-                                                    </span>
-                                                    <div className="progress-track">
-                                                        <div className="progress-bar" style={{ width: `${Math.min(100, row.persentase * 5)}%` }} />
-                                                    </div>
-                                                </div>
+                                                {(() => {
+                                                    const maxPct = Math.max(...filteredVillages.map(v => Number(v.persentase) || 0), 1);
+                                                    const barWidth = Math.min(100, (Number(row.persentase) / maxPct) * 100);
+                                                    return (
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+                                                            <span style={{ color: '#1a2b4a', fontWeight: 500, minWidth: 40 }}>
+                                                                {Number(row.persentase).toFixed(2)}%
+                                                            </span>
+                                                            <div className="progress-track">
+                                                                <div className="progress-bar" style={{ width: `${barWidth}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
                                         </tr>
                                     );
@@ -605,7 +643,8 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                 )}
             </div>
 
-            <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onSuccess={() => window.location.reload()} />
+            <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onSuccess={() => { setJustUpdated(true); window.location.reload(); }} />
+            <UploadMandorModal isOpen={isUploadMandorOpen} onClose={() => setIsUploadMandorOpen(false)} onSuccess={() => { window.location.reload(); }} />
         </div>
     );
 }
