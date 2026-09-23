@@ -102,6 +102,18 @@ export async function POST(request: NextRequest) {
         // Convert to JSON
         const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
 
+        // Fetch mandor mapping
+        const { data: mandorData, error: mandorError } = await supabase
+            .from('mandor_mapping')
+            .select('*');
+            
+        const mandorMap: Record<string, any> = {};
+        if (mandorData) {
+            mandorData.forEach(m => {
+                mandorMap[m.kit_mandor] = m;
+            });
+        }
+
         let totalHc = 0;
         const villageCounts: Record<string, { count: number; district: string; laki: number; perempuan: number }> = {};
         const employeeRecords: any[] = [];
@@ -165,6 +177,9 @@ export async function POST(request: NextRequest) {
 
             // Collect individual employee data
             const { komoditi, bagian } = getKomoditiAndBagian(row);
+            const kitMandor = String(row['Kode Mandor'] || '').trim();
+            const mappedMandor = mandorMap[kitMandor] || {};
+
             employeeRecords.push({
                 nama_desa: normalizedDesa,
                 kecamatan: district,
@@ -176,6 +191,11 @@ export async function POST(request: NextRequest) {
                 birth_date: formattedBirthDate,
                 komoditi,
                 bagian,
+                kit_tk: String(row['Pers.No.'] || row['Pers No.'] || row['Pers No'] || row['Personnel Number'] || row['Persno'] || row['persno'] || ''),
+                kit_mandor: kitMandor,
+                nama_mandor: mappedMandor.nama_mandor || '-',
+                kasi: mappedMandor.kasi || '-',
+                indeks_tk: String(row['Pers.No.'] || row['Pers No.'] || row['Pers No'] || row['Personnel Number'] || row['Persno'] || row['persno'] || '-'),
             });
         }
 

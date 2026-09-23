@@ -12,9 +12,9 @@ export async function GET() {
         .single();
     
     const { data, error } = await supabase
-        .from('upload_logs')
+        .from('employee_domisili')
         .select('*')
         .limit(5);
     
-    return NextResponse.json({ data, error });
+    return NextResponse.json({ latestUpload, data, error });
 }
