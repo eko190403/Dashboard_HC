@@ -3,6 +3,7 @@ export interface User {
   name: string;
   role: string;
   initials: string;
+  avatar?: string;
 }
 
 const USERS: Array<User & { password: string }> = [
@@ -46,6 +47,21 @@ export function getUser(): User | null {
   } catch {
     return null;
   }
+}
+
+export function updateUser(updates: Partial<Pick<User, 'name' | 'avatar'>>): User | null {
+  const current = getUser();
+  if (!current) return null;
+  const name = updates.name?.trim() || current.name;
+  const updated: User = {
+    ...current,
+    ...updates,
+    name,
+    initials: name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+  };
+  localStorage.setItem(KEY, JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent('hr-user-updated', { detail: updated }));
+  return updated;
 }
 
 export function isAuthenticated(): boolean {

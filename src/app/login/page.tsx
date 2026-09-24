@@ -2,7 +2,7 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { login, isAuthenticated } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -66,13 +66,14 @@ export default function LoginPage() {
         {/* Logo & branding */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{
-            width: 72, height: 72,
-            background: 'linear-gradient(135deg, #1e5fd4 0%, #3b82f6 100%)',
+            width: 96, height: 96,
+            background: '#fff',
             borderRadius: 20, margin: '0 auto 20px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 16px 40px rgba(30,95,212,0.4)',
+            boxShadow: '0 16px 40px rgba(30,95,212,0.2)',
+            overflow: 'hidden',
           }}>
-            <Building2 size={32} color="#fff" />
+            <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.025em' }}>
             Selamat Datang
