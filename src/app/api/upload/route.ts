@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
 import { supabase } from '@/lib/supabase';
-import { normalizeDesa } from '@/lib/normalizer';
+import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
 
 function getKomoditiAndBagian(row: any): { komoditi: string; bagian: string } {
     // Baca langsung dari kolom SAP yang sudah terstruktur
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
             const rawAddr = row['Street and House Number'];
             const district = row['District'] || '';
             const status = row['Employment Status'] || '';
-            const gender = (row['Gender Key'] || '').toString().toLowerCase();
+            const gender = normalizeGender(row['Gender Key']);
 
             // Skip empty rows if necessary
             if (rawAddr === undefined && district === '') continue;
@@ -138,9 +138,9 @@ export async function POST(request: NextRequest) {
                 villageCounts[normalizedDesa] = { count: 0, district: district, laki: 0, perempuan: 0 };
             }
             villageCounts[normalizedDesa].count += 1;
-            if (gender === 'male') {
+            if (gender === 'L') {
                 villageCounts[normalizedDesa].laki += 1;
-            } else if (gender === 'female') {
+            } else if (gender === 'P') {
                 villageCounts[normalizedDesa].perempuan += 1;
             }
             totalHc += 1;
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
                 nama_desa: normalizedDesa,
                 kecamatan: district,
                 employee_name: row['Employee Name'] || row['Name'] || row['Full Name'] || 'Unknown',
-                gender: row['Gender Key'] || '',
+                gender,
                 street_address: rawAddr || '',
                 employment_status: status,
                 age: age,

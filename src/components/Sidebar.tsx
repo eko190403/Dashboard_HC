@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-    LayoutDashboard, History, Building2, Users, ChevronRight,
+    LayoutDashboard, History, Users, ChevronRight,
     Wheat, CalendarRange, ChevronDown
 } from 'lucide-react';
 import { getUser, type User } from '@/lib/auth';
@@ -24,6 +24,12 @@ export default function Sidebar() {
     useEffect(() => {
         setUser(getUser());
     }, [pathname]);
+
+    useEffect(() => {
+        const handleUserUpdate = (event: Event) => setUser((event as CustomEvent<User>).detail);
+        window.addEventListener('hr-user-updated', handleUserUpdate);
+        return () => window.removeEventListener('hr-user-updated', handleUserUpdate);
+    }, []);
 
     // Auto-expand age group if on age-detail page
     useEffect(() => {
@@ -70,8 +76,8 @@ export default function Sidebar() {
                 {/* Logo / Brand */}
                 <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #dde3ed' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
-                        <div style={{ width: 36, height: 36, background: '#1e5fd4', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Building2 size={18} color="#fff" />
+                        <div style={{ width: 36, height: 36, borderRadius: 9, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#fff' }}>
+                            <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         </div>
                         <div>
                             <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2b4a', lineHeight: 1.2 }}>HR Dashboard</div>
@@ -162,7 +168,7 @@ export default function Sidebar() {
                 {/* User Footer */}
                 <div style={{ padding: '14px 16px', borderTop: '1px solid #dde3ed', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                        {user?.initials ?? <Users size={15} />}
+                        {user?.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
                     </div>
                     <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 12, color: '#1a2b4a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name ?? 'Admin HR'}</div>
@@ -174,8 +180,8 @@ export default function Sidebar() {
             {/* ===== MOBILE TOP BAR ===== */}
             <div className="mobile-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 30, height: 30, background: '#1e5fd4', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Building2 size={15} color="#fff" />
+                    <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#fff' }}>
+                        <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     </div>
                     <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2b4a', lineHeight: 1.2 }}>HR Dashboard</div>
@@ -183,7 +189,7 @@ export default function Sidebar() {
                     </div>
                 </div>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-                    {user?.initials ?? <Users size={15} />}
+                    {user?.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
                 </div>
             </div>
 

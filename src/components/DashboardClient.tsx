@@ -6,13 +6,11 @@ import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
 } from 'recharts';
-import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
-import MandorSummary from './MandorSummary';
-import { getUser, type User } from '@/lib/auth';
 
 interface DashboardData {
     totalHc: number;
@@ -71,32 +69,36 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
     const [justUpdated, setJustUpdated] = useState(false);
-    const [authUser, setAuthUser] = useState<User | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
     const [ageData, setAgeData] = useState<any[]>([]);
     const [ageUnknown, setAgeUnknown] = useState(0);
+    const [ageLoading, setAgeLoading] = useState(true);
 
     useEffect(() => {
-        setAuthUser(getUser());
-    }, []);
-
-    useEffect(() => {
+        const controller = new AbortController();
         const fetchAgeData = async () => {
+            setAgeLoading(true);
             try {
-                const res = await fetch('/api/age-demographics');
+                const params = filterGenderVillage !== 'All'
+                    ? `?nama_desa=${encodeURIComponent(filterGenderVillage)}`
+                    : '';
+                const res = await fetch(`/api/age-demographics${params}`, { signal: controller.signal });
                 if (res.ok) {
                     const json = await res.json();
                     setAgeData(json.data || []);
                     setAgeUnknown(json.unknown || 0);
                 }
             } catch (err) {
-                console.error("Failed to fetch age data", err);
+                if ((err as Error).name !== 'AbortError') console.error("Failed to fetch age data", err);
+            } finally {
+                if (!controller.signal.aborted) setAgeLoading(false);
             }
         };
         fetchAgeData();
-    }, []);
+        return () => controller.abort();
+    }, [filterGenderVillage]);
 
     if (!initialData) {
         return (
@@ -155,21 +157,12 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     const topDesaData = initialData.villageData.filter(v => !v.is_grouped).slice(0, 10);
 
     const genderData = useMemo(() => {
-        let laki = 0;
-        let perempuan = 0;
-
-        if (filterGenderVillage === 'All') {
-            initialData.villageData.forEach(v => {
-                laki += (v.jumlah_laki || 0);
-                perempuan += (v.jumlah_perempuan || 0);
-            });
-        } else {
-            const v = initialData.villageData.find(v => v.nama_desa === filterGenderVillage);
-            if (v) {
-                laki = v.jumlah_laki || 0;
-                perempuan = v.jumlah_perempuan || 0;
-            }
-        }
+        const villages = filterGenderVillage === 'All'
+            ? initialData.villageData
+            : initialData.villageData.filter(v => v.nama_desa === filterGenderVillage);
+        const getCount = (value: unknown) => Number(value) || 0;
+        const laki = villages.reduce((total, village) => total + getCount(village.jumlah_laki), 0);
+        const perempuan = villages.reduce((total, village) => total + getCount(village.jumlah_perempuan), 0);
 
         return [
             { name: 'Laki-laki', value: laki, fill: '#1e5fd4' },
@@ -213,18 +206,13 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
     ];
 
     return (
-        <div className="dashboard-wrapper" style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+        <div className="dashboard-wrapper" style={{ padding: '22px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
             {/* ===== HEADER ===== */}
-            <div className="dashboard-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+            <div className="dashboard-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div>
-                    {authUser && (
-                        <p style={{ margin: '0 0 4px', fontSize: 13, color: '#94a3b8' }}>
-                            👋 Selamat datang, <strong style={{ color: '#1e5fd4' }}>{authUser.name}</strong>
-                        </p>
-                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>
+                        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a2b4a' }}>
                             Dashboard Domisili Tenaga Kerja
                         </h1>
                         {justUpdated && (
@@ -276,6 +264,15 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <div style={{ fontSize: 12, color: '#94a3b8' }}>{card.sub}</div>
                     </div>
                 ))}
+            </div>
+
+            {/* ===== TK CHART ===== */}
+            <div className="card" style={{ padding: '22px 24px', marginBottom: 24 }}>
+                <div style={{ marginBottom: 16 }}>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
+                </div>
+                <TKChart />
             </div>
 
             {/* ===== CHARTS ===== */}
@@ -456,7 +453,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                     </div>
                     <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
+                            <PieChart key={`${filterGenderVillage}-${genderData[0].value}-${genderData[1].value}`}>
                                 <Pie
                                     data={genderData}
                                     cx="50%"
@@ -512,7 +509,11 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Distribusi usia produktif</p>
                     </div>
                     <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
-                        {ageData.length > 0 ? (
+                        {ageLoading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                <span style={{ fontSize: 12, color: '#94a3b8' }}>Memuat data usia...</span>
+                            </div>
+                        ) : ageData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
@@ -585,20 +586,6 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                 </div>
             </div>
 
-            {/* ===== TK CHART & MANDOR SUMMARY ===== */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
-                <div className="card" style={{ padding: '22px 24px' }}>
-                    <div style={{ marginBottom: 16 }}>
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
-                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
-                    </div>
-                    <TKChart />
-                </div>
-                
-                {/* Mandor Summary */}
-                <MandorSummary />
-            </div>
-
             {/* ===== DATA TABLE ===== */}
             <div className="card" style={{ overflow: 'hidden' }}>
                 {/* Table Header Bar */}
@@ -640,6 +627,19 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                 <option key={d} value={d}>{d === 'All' ? 'Semua Kecamatan' : d}</option>
                             ))}
                         </select>
+                        {(searchQuery || filterDistrict !== 'All' || filterGenderVillage !== 'All') && (
+                            <button
+                                className="btn-secondary"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setFilterDistrict('All');
+                                    setFilterGenderVillage('All');
+                                }}
+                                title="Reset semua filter"
+                            >
+                                <RotateCcw size={14} /> Reset Filter
+                            </button>
+                        )}
                         {/* Export */}
                         <button
                             className="btn-secondary"

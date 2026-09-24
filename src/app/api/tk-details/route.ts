@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
             if (latestUpload) q = q.eq('upload_id', latestUpload.id);
             if (komoditi && komoditi !== 'Semua') q = q.eq('komoditi', komoditi);
             if (bagian) q = q.eq('bagian', bagian);
-            if (gender && gender !== 'Semua') q = q.eq('gender', gender);
+            if (gender === 'L') q = q.in('gender', ['L', 'male', 'Male', 'laki-laki']);
+            if (gender === 'P') q = q.in('gender', ['P', 'female', 'Female', 'perempuan']);
             if (search) q = q.ilike('employee_name', `%${search}%`);
             return q;
         };

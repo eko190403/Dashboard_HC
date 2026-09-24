@@ -3,9 +3,14 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+interface AgeRow {
+    age: number | null;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
+        const village = searchParams.get('nama_desa');
         
         // Ambil ID upload terakhir
         const { data: latestUpload, error: uploadError } = await supabase
@@ -26,9 +31,12 @@ export async function GET(request: NextRequest) {
         if (latestUpload) {
             query = query.eq('upload_id', latestUpload.id);
         }
+        if (village && village !== 'All') {
+            query = query.eq('nama_desa', village);
+        }
 
         // Fetch all data (handling 1000 rows limit)
-        let allData: any[] = [];
+        const allData: AgeRow[] = [];
         let page = 0;
         const pageSize = 1000;
         while (true) {
@@ -74,8 +82,9 @@ export async function GET(request: NextRequest) {
             unknown
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
         console.error('Error fetching age demographics:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

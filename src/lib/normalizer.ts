@@ -198,6 +198,13 @@ export function normalizeDesa(rawAddr: string, district: string): string {
     return 'Tidak Diketahui';
 }
 
+export function normalizeGender(value: unknown): 'L' | 'P' | '' {
+    const gender = String(value || '').trim().toLowerCase();
+    if (['l', 'male', 'laki-laki', 'laki laki', 'pria'].includes(gender)) return 'L';
+    if (['p', 'female', 'perempuan', 'wanita'].includes(gender)) return 'P';
+    return '';
+}
+
 function toTitleCase(str: string): string {
     return str.replace(
         /\w\S*/g,

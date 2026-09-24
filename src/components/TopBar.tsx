@@ -2,19 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, LogOut, UserCircle2 } from 'lucide-react';
+import { ChevronDown, LogOut, UserCircle2, Settings } from 'lucide-react';
 import { getUser, logout, type User } from '@/lib/auth';
 
 export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => getUser());
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setUser(getUser());
-  }, [pathname]);
+    const handleUserUpdate = (event: Event) => setUser((event as CustomEvent<User>).detail);
+    window.addEventListener('hr-user-updated', handleUserUpdate);
+    return () => window.removeEventListener('hr-user-updated', handleUserUpdate);
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -88,7 +90,7 @@ export default function TopBar() {
             color: '#fff', fontSize: 13, fontWeight: 700,
             boxShadow: '0 2px 8px rgba(30,95,212,0.3)',
           }}>
-            {user.initials}
+            {user.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
           </div>
 
           <ChevronDown
@@ -119,7 +121,7 @@ export default function TopBar() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontSize: 14, fontWeight: 700,
               }}>
-                {user.initials}
+                {user.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
               </div>
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{user.name}</div>
@@ -128,7 +130,7 @@ export default function TopBar() {
             </div>
 
             {/* Profile menu item */}
-            <button style={{
+            <button onClick={() => { setOpen(false); router.push('/profile'); }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 8,
               padding: '9px 12px', borderRadius: 8, border: 'none',
               background: 'none', cursor: 'pointer',
@@ -140,6 +142,20 @@ export default function TopBar() {
             >
               <UserCircle2 size={15} color="#64748b" />
               Profil Saya
+            </button>
+
+            <button onClick={() => { setOpen(false); router.push('/settings'); }} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 12px', borderRadius: 8, border: 'none',
+              background: 'none', cursor: 'pointer',
+              fontSize: 13, color: '#374151', fontWeight: 500,
+              transition: 'background 0.12s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <Settings size={15} color="#64748b" />
+              Pengaturan
             </button>
 
             {/* Logout */}

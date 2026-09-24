@@ -2,14 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Search, Download, Users, Filter, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, Search, Download, Users, Filter, ChevronDown, ChevronLeft, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 const KOMODITI_COLORS: Record<string, string> = {
-    Guava: '#f97316',
-    Pine: '#a855f7',
+    Guava: '#10b981',
+    Pine: '#f59e0b',
     Palm: '#22c55e',
     Karet: '#ef4444',
+    Banana: '#eab308',
+    QCPP: '#3b82f6',
+    Planting: '#8b5cf6',
+    Agritech: '#ec4899',
+    'Riset & R&D': '#06b6d4',
+    'Field & Support': '#64748b',
+    Lainnya: '#94a3b8',
     'Semua': '#1e5fd4',
 };
 
@@ -30,8 +37,28 @@ export default function DetailTKPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [bagianList, setBagianList] = useState<string[]>([]);
+    const [komoditiList, setKomoditiList] = useState<string[]>([]);
 
     const komoditiColor = KOMODITI_COLORS[filterKomoditi] || '#1e5fd4';
+
+    useEffect(() => {
+        const fetchKomoditi = async () => {
+            try {
+                const res = await fetch('/api/chart-tk', { cache: 'no-store' });
+                const json = await res.json();
+                const available = (json.komoditiSummary || [])
+                    .filter((item: { name: string; value: number }) => item.value > 0)
+                    .map((item: { name: string }) => item.name);
+                setKomoditiList(available);
+                if (filterKomoditi !== 'Semua' && !available.includes(filterKomoditi)) {
+                    setFilterKomoditi('Semua');
+                }
+            } catch (err) {
+                console.error('Gagal mengambil daftar komoditi', err);
+            }
+        };
+        fetchKomoditi();
+    }, [filterKomoditi]);
 
     // Fetch available bagian when komoditi changes
     useEffect(() => {
@@ -128,16 +155,16 @@ export default function DetailTKPage() {
     const pageEnd = Math.min(page * 100, totalCount);
 
     return (
-        <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+        <div className="tk-detail-page" style={{ padding: '22px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
             {/* Header */}
-            <div style={{ marginBottom: 28 }}>
-                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', textDecoration: 'none', marginBottom: 16 }}>
+            <div className="tk-detail-header" style={{ marginBottom: 16 }}>
+                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', textDecoration: 'none', marginBottom: 12 }}>
                     <ArrowLeft size={15} /> Kembali ke Dashboard
                 </Link>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                     <div>
-                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>Detail Tenaga Kerja</h1>
+                        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a2b4a' }}>Detail Tenaga Kerja</h1>
                         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
                             Komoditi:{' '}
                             <strong style={{ color: komoditiColor }}>{filterKomoditi}</strong>
@@ -163,9 +190,9 @@ export default function DetailTKPage() {
             </div>
 
             {/* Filters */}
-            <div style={{
+            <div className="tk-detail-filters" style={{
                 background: '#fff', borderRadius: 12, border: '1px solid #dde3ed',
-                padding: '14px 20px', marginBottom: 16,
+                padding: '11px 16px', marginBottom: 16,
                 display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
             }}>
                 {/* Search */}
@@ -197,7 +224,7 @@ export default function DetailTKPage() {
                         }}
                     >
                         <option value="Semua">Semua Komoditi</option>
-                        {Object.keys(KOMODITI_COLORS).filter(k => k !== 'Semua').map(k => (
+                        {komoditiList.map(k => (
                             <option key={k} value={k}>{k}</option>
                         ))}
                     </select>
@@ -245,6 +272,22 @@ export default function DetailTKPage() {
                     </select>
                     <ChevronDown size={13} color="#94a3b8" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 </div>
+
+                {(searchQuery || filterKomoditi !== 'Semua' || filterGender !== 'Semua' || filterBagian) && (
+                    <button
+                        onClick={() => {
+                            setSearchQuery('');
+                            setFilterKomoditi('Semua');
+                            setFilterGender('Semua');
+                            setFilterBagian('');
+                            setPage(1);
+                        }}
+                        aria-label="Reset semua filter"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 12px', borderRadius: 8, border: '1px solid #dde3ed', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                        <RotateCcw size={14} /> Reset
+                    </button>
+                )}
 
                 {/* Total count badge */}
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
