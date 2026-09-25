@@ -24,11 +24,27 @@ export async function GET(request: NextRequest) {
         const referenceByPersonnel = new Map(
             referenceRows.map(row => [String(row['Pers.No.']).trim(), row]),
         );
+        const referenceByName = new Map<string, Record<string, unknown>[]>();
+        const referenceByMandor = new Map<string, Record<string, unknown>[]>();
+        for (const row of referenceRows) {
+            const name = String(row['Full Name'] || '').trim().toLowerCase();
+            const mandor = String(row['Kode Mandor'] || '').trim();
+            if (name) referenceByName.set(name, [...(referenceByName.get(name) || []), row]);
+            if (mandor && mandor !== '0') referenceByMandor.set(mandor, [...(referenceByMandor.get(mandor) || []), row]);
+        }
 
         const allData = latestRows
             .filter(row => String(row['Employment Status']).trim().toLowerCase() === 'active')
             .map(row => {
-                const referenceRow = referenceByPersonnel.get(String(row['Pers.No.']).trim());
+                const personnel = String(row['Pers.No.']).trim();
+                const name = String(row['Full Name'] || '').trim().toLowerCase();
+                const mandor = String(row['Kode Mandor'] || '').trim();
+                const nameMatches = referenceByName.get(name) || [];
+                const mandorMatches = referenceByMandor.get(mandor) || [];
+                const mandorPairs = new Set(mandorMatches.map(item => `${item.Choice}|${item.Subdep}`));
+                const referenceRow = referenceByPersonnel.get(personnel)
+                    || (nameMatches.length === 1 ? nameMatches[0] : undefined)
+                    || (mandorPairs.size === 1 ? mandorMatches[0] : undefined);
                 const fallbackDepartment = String(row['Sub Department Text'] || row['Department Text'] || row['Organizational Unit'] || 'Departemen Belum Terisi').trim();
                 const fallbackText = fallbackDepartment.toLowerCase();
                 const fallbackChoice = fallbackText.includes('banana')
