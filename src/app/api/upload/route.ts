@@ -108,6 +108,14 @@ export async function POST(request: NextRequest) {
         const masterWorkbook = xlsx.read(fs.readFileSync(masterPath), { raw: true });
         const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as any[];
         const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.']).trim(), row]));
+        const masterByName = new Map<string, any[]>();
+        const masterByMandor = new Map<string, any[]>();
+        masterRows.forEach(row => {
+            const name = String(row['Full Name'] || '').trim().toLowerCase();
+            const mandor = String(row['Kode Mandor'] || '').trim();
+            if (name) masterByName.set(name, [...(masterByName.get(name) || []), row]);
+            if (mandor && mandor !== '0') masterByMandor.set(mandor, [...(masterByMandor.get(mandor) || []), row]);
+        });
 
         // Fetch mandor mapping
         const { data: mandorData, error: mandorError } = await supabase
@@ -184,7 +192,14 @@ export async function POST(request: NextRequest) {
 
             // Collect individual employee data
             const personnelNumber = String(row['Pers.No.'] || row['Pers No.'] || row['Personnel Number'] || row['Persno'] || row['persno'] || '').trim();
-            const masterRow = masterByPersonnel.get(personnelNumber);
+            const employeeName = String(row['Employee Name'] || row['Name'] || row['Full Name'] || '').trim().toLowerCase();
+            const mandorCode = String(row['Kode Mandor'] || '').trim();
+            const nameMatches = masterByName.get(employeeName) || [];
+            const mandorMatches = masterByMandor.get(mandorCode) || [];
+            const mandorPairs = new Set(mandorMatches.map(item => `${item.Choice}|${item.Subdep2}`));
+            const masterRow = masterByPersonnel.get(personnelNumber)
+                || (nameMatches.length === 1 ? nameMatches[0] : undefined)
+                || (mandorPairs.size === 1 ? mandorMatches[0] : undefined);
             const masterDepartment = String(masterRow?.Subdep2 || '').trim();
             const { komoditi, bagian: derivedBagian } = getKomoditiAndBagian(masterDepartment ? { ...row, 'Sub Department Text': masterDepartment } : row);
             const bagian = masterDepartment || derivedBagian;
