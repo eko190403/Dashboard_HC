@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
 
         // Format data untuk Recharts
         const result = Object.entries(bagianDesaCounts).map(([bagian, desaCounts]) => {
-            const rowData: Record<string, unknown> = { bagian };
-            topDesa.forEach(desa => rowData[desa] = 0);
+            const total = Object.values(desaCounts).reduce((sum, count) => sum + count, 0);
+            const rowData: Record<string, unknown> = { bagian, total };
 
             Object.entries(desaCounts).forEach(([desa, count]) => {
                 rowData[desa] = count;
@@ -103,8 +103,7 @@ export async function GET(request: NextRequest) {
         const sortedResult = result
             .filter(row => {
                 // Buang baris yang totalnya 0 (tidak ada TK untuk filter ini)
-                const total = topDesa.reduce((s, d) => s + (Number(row[d]) || 0), 0);
-                return total > 0;
+                return Number(row.total) > 0;
             })
             .sort((a, b) => {
                 const bagianA = String(a.bagian);
