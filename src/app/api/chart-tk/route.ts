@@ -11,46 +11,25 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const filterKomoditi = searchParams.get('komoditi') || 'Semua';
 
-        const latestWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'PG2 21 Sept 2026.XLSX')), { raw: true });
-        const masterWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), '17092026B.XLSX')), { raw: true });
-        const latestRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
-            latestWorkbook.Sheets[latestWorkbook.SheetNames[0]],
+        const workbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'EXPORT3.xlsx')), { raw: true });
+        const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+            workbook.Sheets[workbook.SheetNames[0]],
             { defval: '' },
-        );
-        const masterRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
-            masterWorkbook.Sheets[masterWorkbook.SheetNames[0]],
-            { defval: '' },
-        );
-        const masterByPersonnel = new Map(
-            masterRows.map(row => [String(row['Pers.No.']).trim(), row]),
         );
 
-        const allData = latestRows
+        const allData = rows
             .filter(row => String(row['Employment Status']).trim().toLowerCase() === 'active')
             .map(row => {
-                const masterRow = masterByPersonnel.get(String(row['Pers.No.']).trim());
-                const department = String(
-                    masterRow?.Subdep2 || row['Sub Department Text'] || row['Department Text'] || 'Departemen Belum Terisi',
-                ).trim().replace(/^SubDep\s*/i, '');
-                const normalizedDepartment = department.toLowerCase();
-                let komoditi = 'Field & Support';
-                if (normalizedDepartment.includes('qc processed pineapple')) komoditi = 'QCPP';
-                else if (normalizedDepartment.includes('wilayah') || normalizedDepartment.includes('harvesting & transport') || normalizedDepartment === 'ppn pg2') komoditi = 'Pine';
-                else if (normalizedDepartment.includes('guava')) komoditi = 'Guava';
-                else if (normalizedDepartment.includes('banana')) komoditi = 'Banana';
-                else if (normalizedDepartment.includes('planting')) komoditi = 'Planting';
-                else if (normalizedDepartment.includes('agritech') || normalizedDepartment.includes('system data')) komoditi = 'Agritech';
-                else if (normalizedDepartment.includes('research') || normalizedDepartment.includes('biofertilizer') || normalizedDepartment.includes('plant breeding') || normalizedDepartment.includes('durian') || normalizedDepartment.includes('operation improvement')) komoditi = 'Riset & R&D';
-
                 const address = String(row['Street and House Number'] || '');
                 const district = String(row.District || '');
                 return {
-                    komoditi,
-                    bagian: department || 'Tidak Diketahui',
+                    komoditi: String(row.Choice || '').trim(),
+                    bagian: String(row.Subdep || '').trim(),
                     nama_desa: normalizeDesa(address, district),
                     kecamatan: district,
                 };
-            });
+            })
+            .filter(row => row.komoditi && row.bagian);
 
         // Hitung total per komoditi (untuk Pie Chart)
         const komoditiCounts: Record<string, number> = {};
@@ -115,15 +94,7 @@ export async function GET(request: NextRequest) {
             });
 
         // Daftar komoditi yang tersedia (untuk Pie Chart / tab)
-        const ORDER = ['Pine', 'Guava', 'Banana', 'QCPP', 'Planting', 'Agritech', 'Riset & R&D', 'Field & Support'];
-        const allKomoditi = [...komoditiSet].sort((a, b) => {
-            const ia = ORDER.indexOf(a);
-            const ib = ORDER.indexOf(b);
-            if (ia === -1 && ib === -1) return a.localeCompare(b);
-            if (ia === -1) return 1;
-            if (ib === -1) return -1;
-            return ia - ib;
-        });
+        const allKomoditi = [...komoditiSet].sort((a, b) => a.localeCompare(b));
 
         const komoditiSummary = allKomoditi.map(name => ({
             name,
