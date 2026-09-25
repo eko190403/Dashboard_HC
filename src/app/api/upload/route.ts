@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
+import path from 'node:path';
+import fs from 'node:fs';
 import { supabase } from '@/lib/supabase';
 import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
 
@@ -102,6 +104,11 @@ export async function POST(request: NextRequest) {
         // Convert to JSON
         const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
 
+        const masterPath = path.join(process.cwd(), '17092026B.XLSX');
+        const masterWorkbook = xlsx.read(fs.readFileSync(masterPath), { raw: true });
+        const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as any[];
+        const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.']).trim(), row]));
+
         // Fetch mandor mapping
         const { data: mandorData, error: mandorError } = await supabase
             .from('mandor_mapping')
@@ -176,8 +183,12 @@ export async function POST(request: NextRequest) {
             }
 
             // Collect individual employee data
-            const { komoditi, bagian } = getKomoditiAndBagian(row);
-            const kitMandor = String(row['Kode Mandor'] || '').trim();
+            const personnelNumber = String(row['Pers.No.'] || row['Pers No.'] || row['Personnel Number'] || row['Persno'] || row['persno'] || '').trim();
+            const masterRow = masterByPersonnel.get(personnelNumber);
+            const masterDepartment = String(masterRow?.Subdep2 || '').trim();
+            const { komoditi, bagian: derivedBagian } = getKomoditiAndBagian(masterDepartment ? { ...row, 'Sub Department Text': masterDepartment } : row);
+            const bagian = masterDepartment || derivedBagian;
+            const kitMandor = String(masterRow?.['Kode Mandor'] || row['Kode Mandor'] || '').trim();
             const mappedMandor = mandorMap[kitMandor] || {};
 
             employeeRecords.push({
@@ -191,11 +202,11 @@ export async function POST(request: NextRequest) {
                 birth_date: formattedBirthDate,
                 komoditi,
                 bagian,
-                kit_tk: String(row['Pers.No.'] || row['Pers No.'] || row['Pers No'] || row['Personnel Number'] || row['Persno'] || row['persno'] || ''),
+                kit_tk: personnelNumber,
                 kit_mandor: kitMandor,
-                nama_mandor: mappedMandor.nama_mandor || '-',
-                kasi: mappedMandor.kasi || '-',
-                indeks_tk: String(row['Pers.No.'] || row['Pers No.'] || row['Pers No'] || row['Personnel Number'] || row['Persno'] || row['persno'] || '-'),
+                nama_mandor: masterRow?.['Nama Mandor'] || mappedMandor.nama_mandor || '-',
+                kasi: masterRow?.Kasie || mappedMandor.kasi || '-',
+                indeks_tk: personnelNumber || '-',
             });
         }
 
