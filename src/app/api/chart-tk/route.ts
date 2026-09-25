@@ -11,25 +11,42 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const filterKomoditi = searchParams.get('komoditi') || 'Semua';
 
-        const workbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'EXPORT3.xlsx')), { raw: true });
-        const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
-            workbook.Sheets[workbook.SheetNames[0]],
+        const latestWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'PG2 21 Sept 2026.XLSX')), { raw: true });
+        const referenceWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'EXPORT3.xlsx')), { raw: true });
+        const latestRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+            latestWorkbook.Sheets[latestWorkbook.SheetNames[0]],
             { defval: '' },
         );
+        const referenceRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+            referenceWorkbook.Sheets[referenceWorkbook.SheetNames[0]],
+            { defval: '' },
+        );
+        const referenceByPersonnel = new Map(
+            referenceRows.map(row => [String(row['Pers.No.']).trim(), row]),
+        );
 
-        const allData = rows
+        const allData = latestRows
             .filter(row => String(row['Employment Status']).trim().toLowerCase() === 'active')
             .map(row => {
+                const referenceRow = referenceByPersonnel.get(String(row['Pers.No.']).trim());
+                const fallbackDepartment = String(row['Sub Department Text'] || row['Department Text'] || row['Organizational Unit'] || 'Departemen Belum Terisi').trim();
+                const fallbackText = fallbackDepartment.toLowerCase();
+                const fallbackChoice = fallbackText.includes('banana')
+                    ? 'Banana'
+                    : fallbackText.includes('guava')
+                        ? 'Guava'
+                        : (fallbackText.includes('research') || fallbackText.includes('crop improvement') || fallbackText.includes('plant breeding'))
+                            ? 'Research and Development'
+                            : 'PG2';
                 const address = String(row['Street and House Number'] || '');
                 const district = String(row.District || '');
                 return {
-                    komoditi: String(row.Choice || '').trim(),
-                    bagian: String(row.Subdep || '').trim(),
+                    komoditi: String(referenceRow?.Choice || row.Choice || fallbackChoice).trim(),
+                    bagian: String(referenceRow?.Subdep || row.Subdep || fallbackDepartment).trim(),
                     nama_desa: normalizeDesa(address, district),
                     kecamatan: district,
                 };
-            })
-            .filter(row => row.komoditi && row.bagian);
+            });
 
         // Hitung total per komoditi (untuk Pie Chart)
         const komoditiCounts: Record<string, number> = {};
