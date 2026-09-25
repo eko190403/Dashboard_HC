@@ -130,10 +130,10 @@ export default function AgeDetailClient() {
                         }}
                     >
                         <option value="Semua">Semua Komoditi</option>
-                        <option value="Pine">Pine</option>
+                        <option value="PG2">PG2</option>
                         <option value="Guava">Guava</option>
-                        <option value="Palm">Palm</option>
-                        <option value="Karet">Karet</option>
+                        <option value="Banana">Banana</option>
+                        <option value="Research and Development">Research and Development</option>
                     </select>
                 </div>
 
