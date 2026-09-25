@@ -10,6 +10,8 @@ import { Loader2, X, Users, Trophy, Layers, MapPin, ChevronRight, ArrowLeft, Ext
 import { useRouter } from 'next/navigation';
 
 const KOMODITI_COLORS: Record<string, string> = {
+    'PG2': '#1e5fd4',
+    'Research and Development': '#8b5cf6',
     'Pine': '#f59e0b',
     'Guava': '#10b981',
     'Banana': '#eab308',
