@@ -86,7 +86,7 @@ export default function TKChart() {
         const desaMap: Record<string, number> = {};
 
         dataTK.forEach(row => {
-            let rowTotal = topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0);
+            const rowTotal = Number(row.total) || 0;
             totalTK += rowTotal;
             if (rowTotal > biggestBagian.count) biggestBagian = { name: row.bagian, count: rowTotal };
             topDesa.forEach(d => { desaMap[d] = (desaMap[d] || 0) + (row[d] || 0); });
@@ -111,7 +111,7 @@ export default function TKChart() {
         return dataTK
             .map(row => ({
                 bagian: row.bagian,
-                total: topDesa.reduce((s, d) => s + (row[d] || 0), 0) + (row['Lainnya'] || 0),
+                total: Number(row.total) || 0,
                 _raw: row,
             }))
             .sort((a, b) => b.total - a.total);
@@ -126,7 +126,6 @@ export default function TKChart() {
                 .map(desa => ({ desa, count: row[desa] || 0 }))
                 .filter(d => d.count > 0)
                 .sort((a, b) => b.count - a.count),
-            ...(row['Lainnya'] > 0 ? [{ desa: 'Lainnya', count: row['Lainnya'] }] : [])
         ];
     }, [selectedBagian, topDesa]);
 
@@ -227,7 +226,7 @@ export default function TKChart() {
                         <div style={{ width: '100%', height: 320 }}>
                             <ResponsiveContainer>
                                 <PieChart className="chart-interactive" style={{ outline: 'none', overflow: 'visible' }}>
-                                    <Pie data={komoditiSummary} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                                    <Pie data={komoditiSummary} dataKey="value" nameKey="name" isAnimationActive={false} cx="50%" cy="50%"
                                         innerRadius={78} outerRadius={108} paddingAngle={3} cursor="pointer"
                                         onClick={(d: any) => d?.name && setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}
                                         labelLine={false}
@@ -310,7 +309,7 @@ export default function TKChart() {
                                             <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                             <YAxis type="category" dataKey="desa" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={140} axisLine={false} tickLine={false} />
                                             <Tooltip content={<DesaTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                            <Bar dataKey="count" radius={[0, 8, 8, 0]} onClick={(data) => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: any) => v > 0 ? v : '' }}>
+                                            <Bar dataKey="count" isAnimationActive={false} radius={[0, 8, 8, 0]} onClick={(data) => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: any) => v > 0 ? v : '' }}>
                                                 {desaChartData.map((entry, i) => (
                                                     <Cell key={i} fill={entry.desa === 'Lainnya' ? '#cbd5e1' : komoditiColor} fillOpacity={entry.desa === 'Lainnya' ? 1 : 1 - (i * 0.07)} />
                                                 ))}
@@ -344,7 +343,7 @@ export default function TKChart() {
                                 <div style={{ height: 320 }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart className="chart-interactive" style={{ outline: 'none', overflow: 'visible' }}>
-                                            <Pie data={bagianChartData} dataKey="total" nameKey="bagian" cx="50%" cy="50%"
+                                            <Pie data={bagianChartData} dataKey="total" nameKey="bagian" isAnimationActive={false} cx="50%" cy="50%"
                                                 innerRadius={78} outerRadius={108} paddingAngle={2} cursor="pointer"
                                                 onClick={(d) => handleBagianClick(d)} stroke="none" cornerRadius={4}
                                                 labelLine={false}
