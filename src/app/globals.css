@@ -354,6 +354,15 @@ html[data-compact="true"] .kpi-card { padding-top: 15px; padding-bottom: 15px; }
   outline: none !important;
   overflow: visible;
 }
+.recharts-wrapper,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-surface:focus-visible {
+  outline: none !important;
+  overflow: visible !important;
+}
 
 /* ====== ANIMATE ====== */
 @keyframes fadeSlideUp {
