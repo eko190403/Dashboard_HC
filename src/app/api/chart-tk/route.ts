@@ -11,17 +11,27 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const filterKomoditi = searchParams.get('komoditi') || 'Semua';
 
-        const workbookPath = path.join(process.cwd(), '17092026B.XLSX');
-        const workbook = xlsx.read(fs.readFileSync(workbookPath), { raw: true });
-        const masterRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
-            workbook.Sheets[workbook.SheetNames[0]],
+        const latestWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'PG2 21 Sept 2026.XLSX')), { raw: true });
+        const masterWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), '17092026B.XLSX')), { raw: true });
+        const latestRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+            latestWorkbook.Sheets[latestWorkbook.SheetNames[0]],
             { defval: '' },
         );
+        const masterRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+            masterWorkbook.Sheets[masterWorkbook.SheetNames[0]],
+            { defval: '' },
+        );
+        const masterByPersonnel = new Map(
+            masterRows.map(row => [String(row['Pers.No.']).trim(), row]),
+        );
 
-        const allData = masterRows
+        const allData = latestRows
             .filter(row => String(row['Employment Status']).trim().toLowerCase() === 'active')
             .map(row => {
-                const department = String(row.Subdep2 || '').trim();
+                const masterRow = masterByPersonnel.get(String(row['Pers.No.']).trim());
+                const department = String(
+                    masterRow?.Subdep2 || row['Sub Department Text'] || row['Department Text'] || 'Departemen Belum Terisi',
+                ).trim().replace(/^SubDep\s*/i, '');
                 const normalizedDepartment = department.toLowerCase();
                 let komoditi = 'Field & Support';
                 if (normalizedDepartment.includes('qc processed pineapple')) komoditi = 'QCPP';
