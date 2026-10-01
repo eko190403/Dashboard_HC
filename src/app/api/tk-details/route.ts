@@ -13,20 +13,23 @@ export async function GET(request: NextRequest) {
         const gender = searchParams.get('gender');
         const page = parseInt(searchParams.get('page') || '1', 10);
         const search = searchParams.get('search') || '';
+        const uploadIdParam = searchParams.get('upload_id');
 
         const from = (page - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        // Ambil ID upload terakhir
-        const { data: latestUpload, error: uploadError } = await supabase
-            .from('upload_logs')
-            .select('id')
-            .order('uploaded_at', { ascending: false })
-            .limit(1)
-            .single();
+        // Ambil upload_id dari param atau fallback ke terakhir
+        let uploadId = uploadIdParam;
+        if (!uploadId) {
+            const { data: latestUpload, error: uploadError } = await supabase
+                .from('upload_logs')
+                .select('id')
+                .order('uploaded_at', { ascending: false })
+                .limit(1)
+                .single();
 
-        if (uploadError && uploadError.code !== 'PGRST116') {
-            throw uploadError;
+            if (uploadError && uploadError.code !== 'PGRST116') throw uploadError;
+            if (latestUpload) uploadId = latestUpload.id;
         }
 
         // Build base query (for count)
@@ -40,8 +43,10 @@ export async function GET(request: NextRequest) {
 
         // Apply common filters
         const applyFilters = (q: any) => {
-            if (latestUpload) q = q.eq('upload_id', latestUpload.id);
-            if (komoditi && komoditi !== 'Semua') q = q.eq('komoditi', komoditi);
+            if (uploadId) q = q.eq('upload_id', uploadId);
+            if (komoditi && komoditi !== 'Semua') {
+                q = q.eq('komoditi', komoditi);
+            }
             if (bagian) q = q.eq('bagian', bagian);
             if (gender === 'L') q = q.in('gender', ['L', 'male', 'Male', 'laki-laki']);
             if (gender === 'P') q = q.in('gender', ['P', 'female', 'Female', 'perempuan']);

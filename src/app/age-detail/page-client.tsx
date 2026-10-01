@@ -53,28 +53,25 @@ export default function AgeDetailClient() {
     const pageStart = (page - 1) * 100 + 1;
     const pageEnd = Math.min(page * 100, totalCount);
 
-    const handleExport = async () => {
-        const allRows: any[] = [];
-        for (let p = 1; p <= Math.min(totalPages, 10); p++) {
-            const params = new URLSearchParams({ range, page: String(p) });
-            if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
-            if (debouncedSearch) params.append('search', debouncedSearch);
-            const res = await fetch(`/api/age-detail?${params}`);
-            const json = await res.json();
-            allRows.push(...(json.data || []));
+    const handleExportExcel = async () => {
+        const params = new URLSearchParams({ range });
+        if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
+        if (debouncedSearch) params.append('search', debouncedSearch);
+
+        try {
+            const res = await fetch(`/api/export-age?${params.toString()}`);
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Detail_Usia_${range || 'Semua'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Gagal export data. Coba lagi.');
         }
-        const headers = ['No', 'KIT TK', 'Nama TK', 'Usia', 'Gender', 'Komoditi', 'Bagian', 'Desa', 'Kecamatan'];
-        const rows = allRows.map((r, i) => [
-            i + 1, r.kit_tk || '', r.employee_name || '', r.age ?? '', r.gender || '',
-            r.komoditi || '', r.bagian || '', r.nama_desa || '', r.kecamatan || ''
-        ]);
-        const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `usia-${range}-${Date.now()}.csv`;
-        a.click();
-        URL.revokeObjectURL(a.href);
     };
 
     const genderMap: Record<string, string> = { 'male': 'L', 'female': 'P', 'Male': 'L', 'Female': 'P', '1': 'L', '2': 'P' };
@@ -103,9 +100,9 @@ export default function AgeDetailClient() {
                             ))}
                         </div>
                     </div>
-                    <button onClick={handleExport} disabled={loading || totalCount === 0}
+                    <button onClick={handleExportExcel} disabled={loading || totalCount === 0}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid #dde3ed', background: '#fff', color: '#1a2b4a', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: totalCount === 0 ? 0.5 : 1 }}>
-                        <Download size={15} /> Export CSV
+                        <Download size={15} /> Export Excel
                     </button>
                 </div>
             </div>

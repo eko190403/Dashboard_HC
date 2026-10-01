@@ -118,37 +118,27 @@ export default function DetailTKPage() {
         setPage(1);
     };
 
-    const handleExportCSV = async () => {
-        // Export current filtered data page by page (max 1000 rows for CSV)
+    const handleExportExcel = async () => {
         const params = new URLSearchParams();
         if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
         if (filterBagian) params.append('bagian', filterBagian);
         if (filterGender !== 'Semua') params.append('gender', filterGender);
         if (debouncedSearch) params.append('search', debouncedSearch);
-        params.append('page', '1');
 
-        // Fetch all pages up to 10 (1000 rows)
-        const allRows: any[] = [];
-        for (let p = 1; p <= Math.min(totalPages, 10); p++) {
-            params.set('page', String(p));
-            const res = await fetch(`/api/tk-details?${params.toString()}`);
-            const json = await res.json();
-            allRows.push(...(json.data || []));
+        try {
+            const res = await fetch(`/api/export-tk?${params.toString()}`);
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Detail_TK_${filterKomoditi}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Gagal export data. Coba lagi.');
         }
-
-        const headers = ['KIT TK', 'Nama TK', 'Gender', 'KIT Mandor', 'Nama Mandor', 'Kasi', 'Indeks TK', 'Bagian'];
-        const rows = allRows.map(r => [
-            r.kit_tk || '', r.employee_name || '', r.gender || '', r.kit_mandor || '',
-            r.nama_mandor || '', r.kasi || '', r.indeks_tk || '', r.bagian || ''
-        ]);
-        const csv = [headers, ...rows].map(r => r.map((c: string) => `"${c}"`).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `detail-tk-${filterKomoditi}-${Date.now()}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
     };
 
     const pageStart = (page - 1) * 100 + 1;
@@ -174,7 +164,7 @@ export default function DetailTKPage() {
                         </p>
                     </div>
                     <button
-                        onClick={handleExportCSV}
+                        onClick={handleExportExcel}
                         disabled={loading || totalCount === 0}
                         style={{
                             display: 'flex', alignItems: 'center', gap: 8,
@@ -184,7 +174,7 @@ export default function DetailTKPage() {
                             cursor: 'pointer', opacity: (loading || totalCount === 0) ? 0.5 : 1,
                         }}
                     >
-                        <Download size={15} /> Export CSV
+                        <Download size={15} /> Export Excel
                     </button>
                 </div>
             </div>
