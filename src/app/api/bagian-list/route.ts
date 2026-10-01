@@ -7,22 +7,29 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const komoditi = searchParams.get('komoditi');
+        const uploadIdParam = searchParams.get('upload_id');
 
-        // Ambil ID upload terakhir
-        const { data: latestUpload } = await supabase
-            .from('upload_logs')
-            .select('id')
-            .order('uploaded_at', { ascending: false })
-            .limit(1)
-            .single();
+        // Ambil upload_id dari param atau fallback ke terakhir
+        let uploadId = uploadIdParam;
+        if (!uploadId) {
+            const { data: latestUpload } = await supabase
+                .from('upload_logs')
+                .select('id')
+                .order('uploaded_at', { ascending: false })
+                .limit(1)
+                .single();
+            if (latestUpload) uploadId = latestUpload.id;
+        }
 
         let query = supabase
             .from('employee_domisili')
             .select('bagian')
             .not('bagian', 'is', null);
 
-        if (latestUpload) query = query.eq('upload_id', latestUpload.id);
-        if (komoditi && komoditi !== 'Semua') query = query.eq('komoditi', komoditi);
+        if (uploadId) query = query.eq('upload_id', uploadId);
+        if (komoditi && komoditi !== 'Semua') {
+            query = query.eq('komoditi', komoditi);
+        }
 
         const { data, error } = await query;
         if (error) throw error;

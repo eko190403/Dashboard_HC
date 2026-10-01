@@ -11,25 +11,30 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const village = searchParams.get('nama_desa');
+        const uploadIdParam = searchParams.get('upload_id');
         
-        // Ambil ID upload terakhir
-        const { data: latestUpload, error: uploadError } = await supabase
-            .from('upload_logs')
-            .select('id')
-            .order('uploaded_at', { ascending: false })
-            .limit(1)
-            .single();
+        let uploadId = uploadIdParam;
+        if (!uploadId) {
+            // Ambil ID upload terakhir
+            const { data: latestUpload, error: uploadError } = await supabase
+                .from('upload_logs')
+                .select('id')
+                .order('uploaded_at', { ascending: false })
+                .limit(1)
+                .single();
 
-        if (uploadError && uploadError.code !== 'PGRST116') {
-            throw uploadError;
+            if (uploadError && uploadError.code !== 'PGRST116') {
+                throw uploadError;
+            }
+            if (latestUpload) uploadId = latestUpload.id;
         }
 
         let query = supabase
             .from('employee_domisili')
             .select('age');
 
-        if (latestUpload) {
-            query = query.eq('upload_id', latestUpload.id);
+        if (uploadId) {
+            query = query.eq('upload_id', uploadId);
         }
         if (village && village !== 'All') {
             query = query.eq('nama_desa', village);

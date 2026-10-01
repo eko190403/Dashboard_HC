@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as xlsx from 'xlsx';
-import fs from 'node:fs';
-import path from 'node:path';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,56 +22,57 @@ export async function GET(request: NextRequest) {
         const komoditi = searchParams.get('komoditi') || '';
         const page = parseInt(searchParams.get('page') || '1', 10);
         const search = searchParams.get('search') || '';
+        const uploadIdParam = searchParams.get('upload_id');
 
         const from = (page - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
         const [minAge, maxAge] = getAgeRange(range);
 
-        const latestWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'PG2 21 Sept 2026.XLSX')), { raw: true });
-        const referenceWorkbook = xlsx.read(fs.readFileSync(path.join(process.cwd(), 'EXPORT3.xlsx')), { raw: true });
-        const latestRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(latestWorkbook.Sheets[latestWorkbook.SheetNames[0]], { defval: '' });
-        const referenceRows = xlsx.utils.sheet_to_json<Record<string, unknown>>(referenceWorkbook.Sheets[referenceWorkbook.SheetNames[0]], { defval: '' });
-        const referenceByPersonnel = new Map(referenceRows.map(row => [String(row['Pers.No.']).trim(), row]));
+        let uploadId = uploadIdParam;
+        if (!uploadId) {
+            const { data: latestUpload } = await supabase
+                .from('upload_logs')
+                .select('id')
+                .order('uploaded_at', { ascending: false })
+                .limit(1)
+                .single();
+            if (latestUpload) uploadId = latestUpload.id;
+        }
 
-        const filtered = latestRows
-            .filter(row => String(row['Employment Status']).trim().toLowerCase() === 'active')
-            .map(row => {
-                const reference = referenceByPersonnel.get(String(row['Pers.No.']).trim());
-                const rawBirthDate = row['Birth date'];
-                const birthDate = typeof rawBirthDate === 'number'
-                    ? new Date((rawBirthDate - 25569) * 86400 * 1000)
-                    : new Date(String(rawBirthDate || ''));
-                const today = new Date();
-                let age = Number.NaN;
-                if (!Number.isNaN(birthDate.getTime())) {
-                    age = today.getFullYear() - birthDate.getFullYear();
-                    if (today.getMonth() < birthDate.getMonth() || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--;
-                }
-                const fallback = String(row['Sub Department Text'] || row['Department Text'] || '').toLowerCase();
-                const fallbackKomoditi = fallback.includes('banana') ? 'Banana' : fallback.includes('guava') ? 'Guava' : fallback.includes('research') || fallback.includes('crop improvement') ? 'Research and Development' : 'PG2';
-                return {
-                    kit_tk: String(row['Pers.No.'] || ''),
-                    employee_name: String(row['Full Name'] || ''),
-                    age,
-                    gender: String(row['Gender Key'] || ''),
-                    komoditi: String(reference?.Choice || fallbackKomoditi),
-                    bagian: String(reference?.Subdep || row['Sub Department Text'] || row['Department Text'] || 'Departemen Belum Terisi'),
-                    nama_desa: String(row['Street and House Number'] || ''),
-                    kecamatan: String(row.District || ''),
-                };
-            })
-            .filter(row => {
-                if (komoditi && komoditi !== 'Semua' && row.komoditi !== komoditi) return false;
-                if (range === '55+' && !(row.age >= 56)) return false;
-                if (range && range !== '55+' && !(row.age >= minAge && row.age <= maxAge)) return false;
-                return !search || row.employee_name.toLowerCase().includes(search.toLowerCase());
-            })
-            .sort((a, b) => a.age - b.age);
-        const count = filtered.length;
-        const data = filtered.slice(from, to + 1);
+        let query = supabase
+            .from('employee_domisili')
+            .select('kit_tk, employee_name, age, gender, komoditi, bagian, nama_desa, kecamatan', { count: 'exact' });
+
+        if (uploadId) query = query.eq('upload_id', uploadId);
+        
+        if (komoditi && komoditi !== 'Semua') {
+            query = query.eq('komoditi', komoditi);
+        }
+
+        if (range === '55+') {
+            query = query.gte('age', 56);
+        } else if (range) {
+            query = query.gte('age', minAge).lte('age', maxAge);
+        }
+
+        if (search) {
+            query = query.ilike('employee_name', `%${search}%`);
+        }
+
+        const { data, count, error } = await query
+            .order('age', { ascending: true })
+            .range(from, to);
+
+        if (error) throw error;
+
+        // Data komoditi sudah clean dari proses upload, kembalikan apa adanya
+        const mappedData = (data || []).map(row => ({
+            ...row,
+            komoditi: row.komoditi || 'Lainnya'
+        }));
 
         return NextResponse.json({
-            data,
+            data: mappedData,
             page,
             totalPages: Math.ceil((count ?? 0) / PAGE_SIZE),
             totalCount: count ?? 0,
@@ -81,6 +80,7 @@ export async function GET(request: NextRequest) {
         });
 
     } catch (error: any) {
+        console.error('Error fetching age details:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

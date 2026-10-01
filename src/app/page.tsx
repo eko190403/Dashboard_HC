@@ -3,31 +3,47 @@ import DashboardClient from '@/components/DashboardClient';
 
 export const revalidate = 0; // Disable caching to always show latest data
 
-export default async function DashboardPage() {
-    // 1. Get latest upload_id
-    const { data: latestUpload, error: uploadError } = await supabase
+export default async function DashboardPage({ searchParams }: { searchParams: { upload_id?: string } }) {
+    const uploadId = searchParams.upload_id;
+
+    // 1. Fetch all uploads for the dropdown
+    const { data: allUploads } = await supabase
         .from('upload_logs')
         .select('*')
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .single();
+        .order('uploaded_at', { ascending: false });
 
-    if (uploadError || !latestUpload) {
-        return <DashboardClient initialData={null} />;
+    if (!allUploads || allUploads.length === 0) {
+        return <DashboardClient initialData={null} allUploads={[]} currentUploadId={null} />;
     }
 
-    // 2. Fetch summary_domisili for this upload
+    // 2. Determine current upload
+    let currentUpload = allUploads[0];
+    let currentIndex = 0;
+    
+    if (uploadId) {
+        const foundIndex = allUploads.findIndex(u => String(u.id) === uploadId);
+        if (foundIndex !== -1) {
+            currentUpload = allUploads[foundIndex];
+            currentIndex = foundIndex;
+        }
+    }
+
+    // 3. Find previous upload for comparison (the one right before the current in time)
+    // Since allUploads is sorted descending, the previous upload is at currentIndex + 1
+    const previousUpload = currentIndex + 1 < allUploads.length ? allUploads[currentIndex + 1] : null;
+
+    // 4. Fetch summary_domisili for this upload
     const { data: villages, error: villagesError } = await supabase
         .from('summary_domisili')
         .select('*')
-        .eq('upload_id', latestUpload.id)
+        .eq('upload_id', currentUpload.id)
         .order('jumlah_tk', { ascending: false });
 
     if (villagesError || !villages) {
-        return <DashboardClient initialData={null} />;
+        return <DashboardClient initialData={null} allUploads={allUploads} currentUploadId={currentUpload.id} />;
     }
 
-    // 3. Process Data for Charts and KPIs
+    // Process Data for Charts and KPIs
     const totalVillages = villages.length;
     
     // Group by District for Donut Chart
@@ -52,18 +68,21 @@ export default async function DashboardPage() {
     const dominantDistrict = finalDistrictData.length > 0 
         ? { 
             name: finalDistrictData[0].name, 
-            percentage: (finalDistrictData[0].value / latestUpload.total_hc) * 100 
+            percentage: (finalDistrictData[0].value / currentUpload.total_hc) * 100 
           } 
         : { name: '-', percentage: 0 };
 
+    const diffHc = previousUpload ? (currentUpload.total_hc - previousUpload.total_hc) : 0;
+
     const dashboardData = {
-        totalHc: latestUpload.total_hc,
+        totalHc: currentUpload.total_hc,
+        diffHc, // New comparison diff
         totalVillages,
         dominantDistrict,
-        lastUpdated: latestUpload.uploaded_at,
+        lastUpdated: currentUpload.uploaded_at,
         villageData: villages,
         districtData: finalDistrictData
     };
 
-    return <DashboardClient initialData={dashboardData} />;
+    return <DashboardClient initialData={dashboardData} allUploads={allUploads} currentUploadId={currentUpload.id} />;
 }

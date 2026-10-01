@@ -12,18 +12,6 @@ function getKomoditiAndBagian(row: any): { komoditi: string; bagian: string } {
     const subDepLow = subDepRaw.toLowerCase();
     const depLow = depRaw.toLowerCase();
 
-    // --- PINE / NANAS (Wilayah) ---
-    const wilayahMatch = subDepRaw.match(/wilayah\s*(\d+)/i);
-    if (wilayahMatch) {
-        return { komoditi: 'Pine', bagian: `Wilayah ${wilayahMatch[1]}` };
-    }
-    if (subDepLow.includes('process pine') || depLow.includes('process pine')) {
-        return { komoditi: 'Pine', bagian: 'Process Pine' };
-    }
-    if (subDepLow.includes('harvesting & transport') || subDepLow.includes('harvesting & ph central')) {
-        return { komoditi: 'Pine', bagian: 'Harvesting & Transport' };
-    }
-
     // --- GUAVA (Jambu) ---
     if (subDepLow.includes('guava') || depLow.includes('guava')) {
         if (subDepLow.includes('harvest')) return { komoditi: 'Guava', bagian: 'Guava Harvest' };
@@ -40,34 +28,14 @@ function getKomoditiAndBagian(row: any): { komoditi: string; bagian: string } {
         return { komoditi: 'Banana', bagian: 'Banana Plantation' };
     }
 
-    // --- QCPP (QC Processed Pineapple) ---
-    if (subDepLow.includes('qc processed') || depLow.includes('qc processed') || subDepLow.includes('quality sistem') || subDepLow.includes('standarization')) {
-        return { komoditi: 'QCPP', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'QC Pineapple' };
-    }
-
-    // --- PLANTING ---
-    if (subDepLow.includes('planting')) {
-        return { komoditi: 'Planting', bagian: 'Planting' };
-    }
-
-    // --- AGRITECH ---
-    if (subDepLow.includes('agritech') || depLow.includes('agritech') || subDepLow.includes('greenhouse') || subDepLow.includes('precision agriculture') || subDepLow.includes('ndvi') || subDepLow.includes('system data')) {
-        return { komoditi: 'Agritech', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'Agritech' };
-    }
-
     // --- RISET / R&D ---
     if (subDepLow.includes('plant breeding') || subDepLow.includes('biofertilizer') || subDepLow.includes('durian') || subDepLow.includes('coconut') || subDepLow.includes('operation improvement') || depLow.includes('crop improvement') || depLow.includes('new crop') || depLow.includes('sustainable')) {
-        return { komoditi: 'Riset & R&D', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || depRaw };
+        return { komoditi: 'Research and Development', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || depRaw };
     }
 
-    // --- FIELD & SUPPORT ---
-    if (subDepLow.includes('field support') || subDepLow.includes('irrigation') || subDepLow.includes('land road') || subDepLow.includes('mtc') || subDepLow.includes('plant maintenance') || subDepLow.includes('warehouse') || subDepLow.includes('service')) {
-        return { komoditi: 'Field & Support', bagian: subDepRaw.replace(/^SubDep\s*/i, '') || 'Field Support' };
-    }
-
-    // --- Fallback ---
-    const bagianFallback = subDepRaw.replace(/^SubDep\s*/i, '') || depRaw || 'Lainnya';
-    return { komoditi: 'Lainnya', bagian: bagianFallback };
+    // --- Fallback (PG2) ---
+    const bagianFallback = subDepRaw.replace(/^SubDep\s*/i, '') || depRaw || 'PG2 Lainnya';
+    return { komoditi: 'PG2', bagian: bagianFallback };
 }
 
 export async function POST(request: NextRequest) {
@@ -104,7 +72,7 @@ export async function POST(request: NextRequest) {
         // Convert to JSON
         const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
 
-        const masterPath = path.join(process.cwd(), '17092026B.XLSX');
+        const masterPath = path.join(process.cwd(), 'EXPORT3.xlsx');
         const masterWorkbook = xlsx.read(fs.readFileSync(masterPath), { raw: true });
         const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as any[];
         const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.']).trim(), row]));
@@ -116,6 +84,23 @@ export async function POST(request: NextRequest) {
             if (name) masterByName.set(name, [...(masterByName.get(name) || []), row]);
             if (mandor && mandor !== '0') masterByMandor.set(mandor, [...(masterByMandor.get(mandor) || []), row]);
         });
+
+        // Load secondary master for Kasie
+        let secondaryKasieMap = new Map<string, string>();
+        try {
+            const secondaryPath = path.join(process.cwd(), '17092026B.XLSX');
+            if (fs.existsSync(secondaryPath)) {
+                const secWb = xlsx.read(fs.readFileSync(secondaryPath), { raw: true });
+                const secRows = xlsx.utils.sheet_to_json(secWb.Sheets[secWb.SheetNames[0]], { defval: '' }) as any[];
+                secRows.forEach(row => {
+                    const pers = String(row['Pers.No.']).trim();
+                    const kasie = String(row['Kasie'] || '').trim();
+                    if (pers && kasie) secondaryKasieMap.set(pers, kasie);
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to load secondary Kasie map:', e);
+        }
 
         // Fetch mandor mapping
         const { data: mandorData, error: mandorError } = await supabase
@@ -196,13 +181,50 @@ export async function POST(request: NextRequest) {
             const mandorCode = String(row['Kode Mandor'] || '').trim();
             const nameMatches = masterByName.get(employeeName) || [];
             const mandorMatches = masterByMandor.get(mandorCode) || [];
-            const mandorPairs = new Set(mandorMatches.map(item => `${item.Choice}|${item.Subdep2}`));
+            const mandorPairs = new Set(mandorMatches.map(item => `${item.Choice}|${item.Subdep}`));
             const masterRow = masterByPersonnel.get(personnelNumber)
                 || (nameMatches.length === 1 ? nameMatches[0] : undefined)
                 || (mandorPairs.size === 1 ? mandorMatches[0] : undefined);
-            const masterDepartment = String(masterRow?.Subdep2 || '').trim();
-            const { komoditi, bagian: derivedBagian } = getKomoditiAndBagian(masterDepartment ? { ...row, 'Sub Department Text': masterDepartment } : row);
-            const bagian = masterDepartment || derivedBagian;
+            
+            // Hapus spasi ganda dan spasi di ujung agar terhindar dari duplikat
+            const masterDepartment = String(masterRow?.Subdep || '')
+                .replace(/\s+/g, ' ')
+                .trim();
+                
+            const masterChoice = String(masterRow?.Choice || '').trim();
+
+            let komoditi: string;
+            let bagian: string;
+
+            if (masterChoice) {
+                // Pakai Choice dari EXPORT3.xlsx sebagai komoditi
+                komoditi = masterChoice;
+            } else {
+                // Fallback: derive dari SAP columns
+                komoditi = getKomoditiAndBagian(row).komoditi;
+            }
+
+            if (masterDepartment) {
+                // Pakai Subdep dari EXPORT3.xlsx sebagai bagian
+                bagian = masterDepartment;
+            } else {
+                // Fallback: derive dari SAP columns
+                bagian = getKomoditiAndBagian(row).bagian;
+            }
+
+            // OVERRIDE: Pisahkan QC Processed Pineapple, Harvesting & Transport, dan Warehouse dari PG2, dan gabung semua variasi Planting
+            if (komoditi === 'PG2') {
+                const bagianLow = bagian.toLowerCase();
+                if (bagianLow.includes('qc processed')) {
+                    komoditi = 'QCPP';
+                } else if (bagianLow.includes('harvesting & transport')) {
+                    komoditi = 'Harvesting & Transport';
+                } else if (bagianLow.includes('warehouse')) {
+                    komoditi = 'Warehouse';
+                } else if (bagianLow.includes('planting')) {
+                    bagian = 'Planting PG2';
+                }
+            }
             const kitMandor = String(masterRow?.['Kode Mandor'] || row['Kode Mandor'] || '').trim();
             const mappedMandor = mandorMap[kitMandor] || {};
 
@@ -220,7 +242,7 @@ export async function POST(request: NextRequest) {
                 kit_tk: personnelNumber,
                 kit_mandor: kitMandor,
                 nama_mandor: masterRow?.['Nama Mandor'] || mappedMandor.nama_mandor || '-',
-                kasi: masterRow?.Kasie || mappedMandor.kasi || '-',
+                kasi: secondaryKasieMap.get(personnelNumber) || masterRow?.Kasie || mappedMandor.kasi || '-',
                 indeks_tk: personnelNumber || '-',
             });
         }
@@ -244,6 +266,28 @@ export async function POST(request: NextRequest) {
             } else {
                 finalCounts[desa] = { count: data.count, district: data.district, isGrouped: false, laki: data.laki, perempuan: data.perempuan };
             }
+        }
+
+        // Check for existing uploads in the same month and year
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+        const { data: existingUploads, error: checkError } = await supabase
+            .from('upload_logs')
+            .select('id')
+            .gte('uploaded_at', startOfMonth)
+            .lte('uploaded_at', endOfMonth);
+
+        if (!checkError && existingUploads && existingUploads.length > 0) {
+            const idsToDelete = existingUploads.map(u => u.id);
+            
+            // Delete related records manually to be safe (if no cascade)
+            await supabase.from('employee_domisili').delete().in('upload_id', idsToDelete);
+            await supabase.from('summary_domisili').delete().in('upload_id', idsToDelete);
+            
+            // Delete the upload logs
+            await supabase.from('upload_logs').delete().in('id', idsToDelete);
         }
 
         // Insert into upload_logs

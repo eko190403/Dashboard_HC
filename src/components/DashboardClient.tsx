@@ -11,9 +11,11 @@ import Link from 'next/link';
 import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
+import HCTrendChart from './HCTrendChart';
 
 interface DashboardData {
     totalHc: number;
+    diffHc: number;
     totalVillages: number;
     dominantDistrict: { name: string; percentage: number };
     lastUpdated: string;
@@ -64,7 +66,7 @@ const CustomTooltipPie = ({ active, payload, totalHc }: any) => {
     return null;
 };
 
-export default function DashboardClient({ initialData }: { initialData: DashboardData | null }) {
+export default function DashboardClient({ initialData, allUploads, currentUploadId }: { initialData: DashboardData | null, allUploads: any[], currentUploadId: string | null }) {
     const router = useRouter();
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
@@ -81,9 +83,11 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         const fetchAgeData = async () => {
             setAgeLoading(true);
             try {
-                const params = filterGenderVillage !== 'All'
-                    ? `?nama_desa=${encodeURIComponent(filterGenderVillage)}`
-                    : '';
+                const queryParams = new URLSearchParams();
+                if (filterGenderVillage !== 'All') queryParams.append('nama_desa', filterGenderVillage);
+                if (currentUploadId) queryParams.append('upload_id', currentUploadId);
+                
+                const params = queryParams.toString() ? `?${queryParams.toString()}` : '';
                 const res = await fetch(`/api/age-demographics${params}`, { signal: controller.signal });
                 if (res.ok) {
                     const json = await res.json();
@@ -98,7 +102,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         };
         fetchAgeData();
         return () => controller.abort();
-    }, [filterGenderVillage]);
+    }, [filterGenderVillage, currentUploadId]);
 
     if (!initialData) {
         return (
@@ -174,7 +178,8 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         {
             label: 'Total Headcount',
             value: initialData.totalHc.toLocaleString('id-ID'),
-            sub: 'Karyawan Aktif',
+            sub: initialData.diffHc > 0 ? `+${initialData.diffHc} dari bulan lalu` : initialData.diffHc < 0 ? `${initialData.diffHc} dari bulan lalu` : 'Karyawan Aktif',
+            subColor: initialData.diffHc > 0 ? '#0ea573' : initialData.diffHc < 0 ? '#e11d48' : '#94a3b8',
             icon: <Users size={20} />,
             iconBg: '#e9f0fc', iconColor: '#1e5fd4',
             borderColor: '#1e5fd4',
@@ -183,6 +188,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             label: 'Total Desa',
             value: initialData.totalVillages.toString(),
             sub: 'Desa terdeteksi',
+            subColor: '#94a3b8',
             icon: <MapPin size={20} />,
             iconBg: '#d1fae5', iconColor: '#0ea573',
             borderColor: '#0ea573',
@@ -191,17 +197,10 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             label: 'Kecamatan Dominan',
             value: initialData.dominantDistrict.name,
             sub: `${initialData.dominantDistrict.percentage.toFixed(2)}% dari total TK`,
+            subColor: '#94a3b8',
             icon: <Map size={20} />,
             iconBg: '#ede9fe', iconColor: '#7c3aed',
             borderColor: '#7c3aed',
-        },
-        {
-            label: 'Update Terakhir',
-            value: new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-            sub: new Date(initialData.lastUpdated).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-            icon: <Clock size={20} />,
-            iconBg: '#fef3c7', iconColor: '#f59e0b',
-            borderColor: '#f59e0b',
         },
     ];
 
@@ -211,7 +210,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             {/* ===== HEADER ===== */}
             <div className="dashboard-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1a2b4a' }}>
                             Dashboard Domisili Tenaga Kerja
                         </h1>
@@ -226,9 +225,34 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                 ✓ Baru Diperbarui
                             </span>
                         )}
+                        <select
+                            className="form-select"
+                            style={{ 
+                                padding: '4px 28px 4px 10px', 
+                                fontSize: 13, 
+                                fontWeight: 600, 
+                                color: '#1e5fd4',
+                                background: '#e9f0fc',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                cursor: 'pointer'
+                            }}
+                            value={currentUploadId || ''}
+                            onChange={(e) => {
+                                const newId = e.target.value;
+                                router.push(`/?upload_id=${newId}`);
+                            }}
+                        >
+                            {allUploads.map(upload => (
+                                <option key={upload.id} value={upload.id}>
+                                    Data {new Date(upload.uploaded_at).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5a7184' }}>
-                        PG 2 Estate — Data per {new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        PG 2 Estate — Update terakhir: {new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
@@ -236,7 +260,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <FileSpreadsheet size={14} /> Master Mandor
                     </button>
                     <button className="btn-primary" onClick={() => setIsUploadOpen(true)}>
-                        <ArrowUp size={14} /> Update Data
+                        <Upload size={14} /> Update Data
                     </button>
                 </div>
             </div>
@@ -261,9 +285,14 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <div style={{ fontSize: i === 2 ? 16 : 26, fontWeight: 700, color: '#1a2b4a', lineHeight: 1.2, marginBottom: 4 }}>
                             {card.value}
                         </div>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{card.sub}</div>
+                        <div style={{ fontSize: 12, color: card.subColor, fontWeight: 500 }}>{card.sub}</div>
                     </div>
                 ))}
+                
+                {/* Mini HC Trend replacing Update Terakhir */}
+                <div className="kpi-card animate-in" style={{ borderTop: `3px solid #1e5fd4`, animationDelay: `180ms`, padding: 0, overflow: 'hidden' }}>
+                    <HCTrendChart variant="mini" />
+                </div>
             </div>
 
             {/* ===== TK CHART ===== */}
@@ -272,7 +301,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                     <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Tenaga Kerja per Bagian & Wilayah Asal</h3>
                     <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Breakdown per komoditi, bagian, dan desa asal tenaga kerja</p>
                 </div>
-                <TKChart />
+                <TKChart uploadId={currentUploadId} />
             </div>
 
             {/* ===== CHARTS ===== */}
@@ -526,7 +555,12 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                                         dataKey="value"
                                         labelLine={false}
                                         onClick={(entry) => {
-                                            if (entry?.name) router.push(`/age-detail?range=${entry.name}`);
+                                            if (entry?.name) {
+                                                const params = new URLSearchParams();
+                                                params.append('range', entry.name);
+                                                if (currentUploadId) params.append('upload_id', currentUploadId);
+                                                router.push(`/age-detail?${params.toString()}`);
+                                            }
                                         }}
                                         style={{ cursor: 'pointer' }}
                                         label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -560,7 +594,12 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                         <div>
                             {ageData.map((d) => (
                                 <div key={d.name}
-                                    onClick={() => router.push(`/age-detail?range=${d.name}`)}
+                                    onClick={() => {
+                                        const params = new URLSearchParams();
+                                        params.append('range', d.name);
+                                        if (currentUploadId) params.append('upload_id', currentUploadId);
+                                        router.push(`/age-detail?${params.toString()}`);
+                                    }}
                                     style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', borderRadius: 4, transition: 'background 0.15s' }}
                                     onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
