@@ -1,30 +1,65 @@
 'use client';
 
 import { useState } from 'react';
-import { History as HistoryIcon, Download, RotateCcw, ArrowLeft, Loader2 } from 'lucide-react';
+import { History as HistoryIcon, RotateCcw, ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
-    const [logs, setLogs] = useState(initialLogs);
+type UploadLog = {
+    id: string | number;
+    uploaded_at: string | number | Date;
+    filename: string;
+    total_hc: number | string;
+    uploaded_by?: string | null;
+    audit_summary?: string | null;
+};
+
+type AuditSummary = {
+    validRows?: number;
+    totalRowsRead?: number;
+    duplicatesSkipped?: number;
+    invalidRows?: number;
+    skippedNonActive?: number;
+};
+
+const parseAuditSummary = (value: string | null | undefined): AuditSummary => {
+    if (!value) return {};
+
+    try {
+        const parsed = JSON.parse(value) as Record<string, unknown>;
+        return {
+            validRows: typeof parsed.validRows === 'number' ? parsed.validRows : undefined,
+            totalRowsRead: typeof parsed.totalRowsRead === 'number' ? parsed.totalRowsRead : undefined,
+            duplicatesSkipped: typeof parsed.duplicatesSkipped === 'number' ? parsed.duplicatesSkipped : undefined,
+            invalidRows: typeof parsed.invalidRows === 'number' ? parsed.invalidRows : undefined,
+            skippedNonActive: typeof parsed.skippedNonActive === 'number' ? parsed.skippedNonActive : undefined,
+        };
+    } catch {
+        return {};
+    }
+};
+
+export default function HistoryClient({ initialLogs }: { initialLogs: UploadLog[] }) {
+    const [logs, setLogs] = useState<UploadLog[]>(initialLogs);
     const [isRollingBack, setIsRollingBack] = useState<string | null>(null);
 
-    const handleRollback = async (id: string, filename: string) => {
+    const handleRollback = async (id: string | number, filename: string) => {
         if (!confirm(`PERINGATAN: Anda akan menghapus permanen data upload "${filename}" dan semua detail tenaga kerja yang terkait. Apakah Anda yakin?`)) {
             return;
         }
 
-        setIsRollingBack(id);
+        setIsRollingBack(String(id));
         try {
-            const res = await fetch(`/api/upload-rollback?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/upload-rollback?id=${String(id)}`, { method: 'DELETE' });
             if (res.ok) {
-                setLogs(logs.filter(l => l.id !== id));
+                setLogs(logs.filter(l => String(l.id) !== String(id)));
                 alert('Rollback berhasil! Data telah dihapus.');
             } else {
-                const data = await res.json();
-                alert(`Gagal melakukan rollback: ${data.error}`);
+                const data = await res.json() as Record<string, unknown>;
+                alert(`Gagal melakukan rollback: ${String(data.error ?? 'Terjadi kesalahan')}`);
             }
-        } catch (e: any) {
-            alert(`Gagal melakukan rollback: ${e.message}`);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Gagal melakukan rollback';
+            alert(`Gagal melakukan rollback: ${message}`);
         } finally {
             setIsRollingBack(null);
         }
@@ -51,7 +86,7 @@ export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
             </div>
 
             {/* Stats */}
-            <div style={{ display: 'flex', gap: 14, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
                 <div className="card" style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
                     <HistoryIcon size={18} color="#1e5fd4" />
                     <div>
@@ -64,7 +99,7 @@ export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
                         <div>
                             <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upload Terakhir</div>
                             <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2b4a', lineHeight: 1.4 }}>
-                                {new Date(logs[0].uploaded_at).toLocaleString('id-ID', {
+                                {new Date(String(logs[0].uploaded_at)).toLocaleString('id-ID', {
                                     day: 'numeric', month: 'long', year: 'numeric',
                                     hour: '2-digit', minute: '2-digit',
                                 })}
@@ -73,6 +108,36 @@ export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
                     </div>
                 )}
             </div>
+
+            {logs.length > 0 && (() => {
+                const latestAudit = parseAuditSummary(logs[0].audit_summary);
+                const totalRowsRead = latestAudit.totalRowsRead ?? 0;
+                const validRows = latestAudit.validRows ?? Number(logs[0].total_hc ?? 0);
+                const duplicates = latestAudit.duplicatesSkipped ?? 0;
+                const invalid = latestAudit.invalidRows ?? 0;
+                const nonActive = latestAudit.skippedNonActive ?? 0;
+
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+                        <div className="card" style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Baris dibaca</div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#1a2b4a', marginTop: 8 }}>{totalRowsRead.toLocaleString('id-ID')}</div>
+                        </div>
+                        <div className="card" style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valid</div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#0ea573', marginTop: 8 }}>{validRows.toLocaleString('id-ID')}</div>
+                        </div>
+                        <div className="card" style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duplikat</div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b', marginTop: 8 }}>{duplicates.toLocaleString('id-ID')}</div>
+                        </div>
+                        <div className="card" style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invalid / Non aktif</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2b4a', marginTop: 8 }}>{invalid.toLocaleString('id-ID')} invalid • {nonActive.toLocaleString('id-ID')} non-aktif</div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Table */}
             <div className="card" style={{ overflow: 'hidden' }}>
@@ -93,9 +158,9 @@ export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
                         <tbody>
                             {logs.length > 0 ? (
                                 logs.map((log, i) => (
-                                    <tr key={log.id}>
+                                    <tr key={String(log.id)}>
                                         <td style={{ color: '#5a7184', whiteSpace: 'nowrap' }}>
-                                            {new Date(log.uploaded_at).toLocaleString('id-ID', {
+                                            {new Date(String(log.uploaded_at)).toLocaleString('id-ID', {
                                                 day: '2-digit', month: 'short', year: 'numeric',
                                                 hour: '2-digit', minute: '2-digit',
                                             })}
@@ -109,22 +174,37 @@ export default function HistoryClient({ initialLogs }: { initialLogs: any[] }) {
                                             </div>
                                         </td>
                                         <td>
-                                            <span style={{ fontWeight: 600 }}>{log.total_hc.toLocaleString('id-ID')}</span>
+                                            <span style={{ fontWeight: 600 }}>{Number(log.total_hc).toLocaleString('id-ID')}</span>
                                             <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4 }}>TK</span>
                                         </td>
-                                        <td style={{ color: '#5a7184' }}>{log.uploaded_by}</td>
+                                        <td style={{ color: '#5a7184' }}>
+                                            {log.uploaded_by ?? '-'}
+                                            {log.audit_summary && (
+                                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                                                    {(() => {
+                                                        const s = parseAuditSummary(log.audit_summary);
+                                                        const parts: string[] = [];
+                                                        if (typeof s.duplicatesSkipped === 'number' && s.duplicatesSkipped > 0) parts.push(`Duplikat: ${s.duplicatesSkipped}`);
+                                                        if (typeof s.invalidRows === 'number' && s.invalidRows > 0) parts.push(`Invalid: ${s.invalidRows}`);
+                                                        if (typeof s.skippedNonActive === 'number' && s.skippedNonActive > 0) parts.push(`Non aktif: ${s.skippedNonActive}`);
+                                                        if (typeof s.validRows === 'number' && s.validRows > 0) parts.push(`Valid: ${s.validRows}`);
+                                                        return parts.length ? parts.join(' • ') : 'Audit tersimpan';
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td style={{ textAlign: 'right' }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                                                 <button 
                                                     title="Rollback" 
                                                     onClick={() => handleRollback(log.id, log.filename)}
-                                                    disabled={isRollingBack === log.id}
+                                                    disabled={isRollingBack === String(log.id)}
                                                     style={{
-                                                    border: '1px solid #dde3ed', background: isRollingBack === log.id ? '#f1f5f9' : '#fff0f3', borderRadius: 6,
-                                                    padding: '5px 8px', cursor: isRollingBack === log.id ? 'not-allowed' : 'pointer', color: '#e11d48',
+                                                    border: '1px solid #dde3ed', background: isRollingBack === String(log.id) ? '#f1f5f9' : '#fff0f3', borderRadius: 6,
+                                                    padding: '5px 8px', cursor: isRollingBack === String(log.id) ? 'not-allowed' : 'pointer', color: '#e11d48',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s',
                                                 }}>
-                                                    {isRollingBack === log.id ? <Loader2 size={14} className="spin" /> : <RotateCcw size={14} />}
+                                                    {isRollingBack === String(log.id) ? <Loader2 size={14} className="spin" /> : <RotateCcw size={14} />}
                                                 </button>
                                             </div>
                                         </td>

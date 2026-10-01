@@ -17,6 +17,34 @@ export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalP
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const formatUploadSummary = (data: Record<string, unknown>) => {
+        const summaryParts: string[] = [];
+
+        const totalHc = typeof data.totalHc === 'number' ? data.totalHc : Number(data.totalHc ?? 0);
+        const duplicatesSkipped = typeof data.duplicatesSkipped === 'number' ? data.duplicatesSkipped : Number(data.duplicatesSkipped ?? 0);
+        const invalidRows = typeof data.invalidRows === 'number' ? data.invalidRows : Number(data.invalidRows ?? 0);
+        const skippedNonActive = typeof data.skippedNonActive === 'number' ? data.skippedNonActive : Number(data.skippedNonActive ?? 0);
+        const validRows = typeof data.validRows === 'number' ? data.validRows : Number(data.validRows ?? 0);
+
+        if (totalHc > 0) {
+            summaryParts.push(`Total HC diproses: ${totalHc.toLocaleString('id-ID')}`);
+        }
+        if (duplicatesSkipped > 0) {
+            summaryParts.push(`Duplikat dibuang: ${duplicatesSkipped.toLocaleString('id-ID')}`);
+        }
+        if (invalidRows > 0) {
+            summaryParts.push(`Baris invalid: ${invalidRows.toLocaleString('id-ID')}`);
+        }
+        if (skippedNonActive > 0) {
+            summaryParts.push(`Status non-aktif: ${skippedNonActive.toLocaleString('id-ID')}`);
+        }
+        if (validRows > 0) {
+            summaryParts.push(`Baris valid akhir: ${validRows.toLocaleString('id-ID')}`);
+        }
+
+        return summaryParts.length > 0 ? ` ${summaryParts.join(' • ')}` : '';
+    };
+
     if (!isOpen) return null;
 
     const reset = () => {
@@ -58,11 +86,15 @@ export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalP
             const data = await res.json();
             if (res.ok) {
                 setIsDone(true);
-                setMessage({ type: 'success', text: `Berhasil! Total ${data.totalHc.toLocaleString('id-ID')} HC diproses.` });
+                const summaryText = `Berhasil! Total ${data.totalHc.toLocaleString('id-ID')} HC diproses.${formatUploadSummary(data)}`;
+                setMessage({ type: 'success', text: summaryText });
                 if (onSuccess) onSuccess();
-                setTimeout(() => { handleClose(); }, 2200);
+                setTimeout(() => { handleClose(); }, 2600);
             } else {
-                setMessage({ type: 'error', text: data.error || 'Terjadi kesalahan saat mengunggah.' });
+                const errorText = data.error || 'Terjadi kesalahan saat mengunggah.';
+                const missingColumns = Array.isArray(data.missingColumns) ? data.missingColumns.join(', ') : '';
+                const details = missingColumns ? ` Kolom tidak ditemukan: ${missingColumns}.` : '';
+                setMessage({ type: 'error', text: `${errorText}${details}` });
             }
         } catch {
             setMessage({ type: 'error', text: 'Gagal terhubung ke server.' });
