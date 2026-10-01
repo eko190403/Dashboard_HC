@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import * as xlsx from 'xlsx';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
@@ -15,7 +16,10 @@ import HCTrendChart from './HCTrendChart';
 
 interface DashboardData {
     totalHc: number;
+    unknownDomicileCount: number | null;
     diffHc: number;
+    diffPercent: number;
+    previousUploadDate: string | null;
     totalVillages: number;
     dominantDistrict: { name: string; percentage: number };
     lastUpdated: string;
@@ -74,6 +78,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
+    const [showOtherVillages, setShowOtherVillages] = useState(false);
     const [ageData, setAgeData] = useState<any[]>([]);
     const [ageUnknown, setAgeUnknown] = useState(0);
     const [ageLoading, setAgeLoading] = useState(true);
@@ -132,6 +137,24 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         );
     }
 
+    const summaryInsight = useMemo(() => {
+        const absDiff = Math.abs(initialData.diffHc);
+
+        if (!initialData.previousUploadDate) {
+            return 'Belum ada upload sebelumnya untuk perbandingan tren.';
+        }
+
+        if (initialData.diffHc > 0) {
+            return `Total HC naik ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
+        }
+
+        if (initialData.diffHc < 0) {
+            return `Total HC turun ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
+        }
+
+        return 'Total HC relatif stabil dibanding upload sebelumnya.';
+    }, [initialData.diffHc, initialData.diffPercent, initialData.previousUploadDate]);
+
     const filteredVillages = useMemo(() => {
         return initialData.villageData
             .filter(v => {
@@ -155,10 +178,47 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         link.click();
     };
 
+    const handleExportReport = () => {
+        const summaryRows = [
+            ['Judul Laporan', 'Dashboard Domisili Tenaga Kerja'],
+            ['Tanggal', new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
+            ['Total Headcount', initialData.totalHc.toLocaleString('id-ID')],
+            ['Perubahan HC', `${initialData.diffHc.toLocaleString('id-ID')} (${Math.abs(initialData.diffPercent).toFixed(1)}%)`],
+            ['Kecamatan Dominan', initialData.dominantDistrict.name],
+            ['Persentase Kecamatan Dominan', `${initialData.dominantDistrict.percentage.toFixed(2)}%`],
+            ['Total Desa', initialData.totalVillages.toString()],
+            [],
+            ['Top Desa', 'Jumlah TK', 'Persentase'],
+            ...[...initialData.villageData].sort((a, b) => b.jumlah_tk - a.jumlah_tk).slice(0, 10).map((v) => [v.nama_desa, v.jumlah_tk.toLocaleString('id-ID'), `${((v.jumlah_tk / initialData.totalHc) * 100).toFixed(2)}%`]),
+            [],
+            ['Distribusi Kecamatan', 'Jumlah TK', 'Persentase'],
+            ...initialData.districtData.map(d => [d.name, d.value.toLocaleString('id-ID'), `${((d.value / initialData.totalHc) * 100).toFixed(2)}%`]),
+        ];
+
+        const workbook = xlsx.utils.book_new();
+        const summarySheet = xlsx.utils.aoa_to_sheet(summaryRows);
+        summarySheet['!cols'] = [
+            { wch: 26 }, { wch: 18 }, { wch: 14 },
+        ];
+        xlsx.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan');
+
+        const exportBuffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([exportBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Laporan_Domisili_TK_${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.click();
+    };
+
     const uniqueDistricts = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kecamatan))).filter(Boolean).sort()];
     const uniqueVillages = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.nama_desa))).filter(Boolean).sort()];
 
     const topDesaData = initialData.villageData.filter(v => !v.is_grouped).slice(0, 10);
+    const otherDesaData = initialData.villageData
+        .filter(v => !v.is_grouped)
+        .slice(10)
+        .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
+    const otherVillagesTotal = otherDesaData.reduce((sum, village) => sum + Number(village.jumlah_tk || 0), 0);
 
     const genderData = useMemo(() => {
         const villages = filterGenderVillage === 'All'
@@ -178,7 +238,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         {
             label: 'Total Headcount',
             value: initialData.totalHc.toLocaleString('id-ID'),
-            sub: initialData.diffHc > 0 ? `+${initialData.diffHc} dari bulan lalu` : initialData.diffHc < 0 ? `${initialData.diffHc} dari bulan lalu` : 'Karyawan Aktif',
+            sub: !initialData.previousUploadDate
+                ? 'Belum ada pembanding'
+                : initialData.diffHc > 0
+                    ? `+${initialData.diffHc.toLocaleString('id-ID')} (${Math.abs(initialData.diffPercent).toFixed(1)}%) vs upload sebelumnya`
+                    : initialData.diffHc < 0
+                        ? `${initialData.diffHc.toLocaleString('id-ID')} (${Math.abs(initialData.diffPercent).toFixed(1)}%) vs upload sebelumnya`
+                        : 'Karyawan Aktif',
             subColor: initialData.diffHc > 0 ? '#0ea573' : initialData.diffHc < 0 ? '#e11d48' : '#94a3b8',
             icon: <Users size={20} />,
             iconBg: '#e9f0fc', iconColor: '#1e5fd4',
@@ -254,6 +320,23 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5a7184' }}>
                         PG 2 Estate — Update terakhir: {new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
+                    <div style={{
+                        marginTop: 10,
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: '#eef6ff',
+                        border: '1px solid #cfe3ff',
+                        color: '#1a2b4a',
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        maxWidth: 700,
+                    }}>
+                        <strong style={{ color: '#1e5fd4' }}>Insight utama:</strong> {summaryInsight} {initialData.dominantDistrict.name !== '-' && (
+                            <span>
+                                Kecamatan <strong>{initialData.dominantDistrict.name}</strong> masih dominan dengan <strong>{initialData.dominantDistrict.percentage.toFixed(2)}%</strong> dari total TK.
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="btn-secondary" onClick={() => setIsUploadMandorOpen(true)} style={{ color: '#0ea573', borderColor: '#0ea573' }}>
@@ -295,6 +378,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                 </div>
             </div>
 
+            {/* ===== EXECUTIVE INSIGHTS ===== */}
             {/* ===== TK CHART ===== */}
             <div className="card" style={{ padding: '22px 24px', marginBottom: 24 }}>
                 <div style={{ marginBottom: 16 }}>
@@ -376,7 +460,50 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                 </div>
                             );
                         })}
-                        {topDesaData.length > 5 && (
+                        {otherDesaData.length > 0 && (
+                            <div style={{ marginTop: 8, borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, color: '#1a2b4a', fontWeight: 700 }}>
+                                        Lainnya ({otherDesaData.length} desa): {otherVillagesTotal.toLocaleString('id-ID')} TK
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowOtherVillages(v => !v)}
+                                        style={{
+                                            border: '1px solid #dde3ed',
+                                            background: '#fff',
+                                            color: '#1e5fd4',
+                                            borderRadius: 6,
+                                            padding: '4px 8px',
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {showOtherVillages ? 'Sembunyikan' : 'Lihat daftar'}
+                                    </button>
+                                </div>
+                                {showOtherVillages && (
+                                    <div style={{ maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+                                        {otherDesaData.map((d, i) => (
+                                            <div key={`${d.nama_desa}-${i}`} style={{
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                padding: '4px 0',
+                                                borderBottom: i < otherDesaData.length - 1 ? '1px solid #f8fafc' : 'none',
+                                            }}>
+                                                <span style={{ flex: 1, fontSize: 10.5, color: '#5a7184', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {d.nama_desa}
+                                                </span>
+                                                <span style={{ fontSize: 10.5, color: '#1e5fd4', fontWeight: 700 }}>
+                                                    {d.jumlah_tk.toLocaleString('id-ID')}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {topDesaData.length > 5 && !otherDesaData.length && (
                             <div style={{ textAlign: 'center', marginTop: 4 }}>
                                 <span style={{ fontSize: 10, color: '#94a3b8' }}>+ {topDesaData.length - 5} desa lainnya di Top 10</span>
                             </div>
@@ -639,6 +766,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>
                                 {filteredVillages.length} dari {initialData.villageData.length} desa ditampilkan
                             </p>
+                            <p
+                                title="Termasuk desa berlabel Tidak Diketahui dan alamat kosong atau tidak valid."
+                                style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}
+                            >
+                                Domisili belum diketahui: <strong>{initialData.unknownDomicileCount === null ? 'Data tidak tersedia' : initialData.unknownDomicileCount.toLocaleString('id-ID')}</strong>{initialData.unknownDomicileCount === null ? '' : ' TK'}
+                            </p>
+                                                    <span style={{ fontSize: 12, color: '#1a2b4a', fontWeight: 500 }}>Umur tidak diketahui</span>
                         </div>
                     </div>
                     {/* Controls row */}
@@ -679,7 +813,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                 <RotateCcw size={14} /> Reset Filter
                             </button>
                         )}
-                        {/* Export */}
+                        <button
+                            className="btn-secondary"
+                            onClick={handleExportReport}
+                            title="Export ringkasan laporan ke Excel"
+                        >
+                            <Download size={14} /> Export Excel
+                        </button>
                         <button
                             className="btn-secondary"
                             onClick={handleExportCSV}
@@ -708,25 +848,23 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             {filteredVillages.length > 0 ? (
                                 filteredVillages.map((row, i) => {
                                     const isGrouped = row.is_grouped;
+                                    const villageHref = isGrouped
+                                        ? `/desa-lainnya?upload_id=${encodeURIComponent(String(currentUploadId || ''))}`
+                                        : `/desa/${encodeURIComponent(row.nama_desa)}`;
+
                                     return (
                                         <tr key={row.id}>
                                             <td style={{ color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    {isGrouped ? (
-                                                        <>
-                                                            <span className="badge badge-blue">Grup</span>
-                                                            <span style={{ fontWeight: 500 }}>{row.nama_desa}</span>
-                                                        </>
-                                                    ) : (
-                                                        <Link 
-                                                            href={`/desa/${encodeURIComponent(row.nama_desa)}`}
-                                                            style={{ fontWeight: 500, color: '#1e5fd4', textDecoration: 'none' }}
-                                                            className="hover-underline"
-                                                        >
-                                                            {row.nama_desa}
-                                                        </Link>
-                                                    )}
+                                                    {isGrouped && <span className="badge badge-blue">Grup</span>}
+                                                    <Link
+                                                        href={villageHref}
+                                                        style={{ fontWeight: 500, color: '#1e5fd4', textDecoration: 'none' }}
+                                                        className="hover-underline"
+                                                    >
+                                                        {row.nama_desa}
+                                                    </Link>
                                                 </div>
                                             </td>
                                             <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kecamatan || '—'}</td>

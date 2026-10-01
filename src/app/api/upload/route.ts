@@ -4,8 +4,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { supabase } from '@/lib/supabase';
 import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
+import { deduplicateRows } from '@/lib/duplicate-check';
+import { filterValidUploadRows, getMissingColumns, REQUIRED_UPLOAD_COLUMNS } from '@/lib/upload-validation';
 
-function getKomoditiAndBagian(row: any): { komoditi: string; bagian: string } {
+function getKomoditiAndBagian(row: Record<string, unknown>): { komoditi: string; bagian: string } {
     // Baca langsung dari kolom SAP yang sudah terstruktur
     const subDepRaw = String(row['Sub Department Text'] || '').trim();
     const depRaw = String(row['Department Text'] || '').trim();
@@ -70,14 +72,54 @@ export async function POST(request: NextRequest) {
         const sheet = workbook.Sheets[sheetName];
         
         // Convert to JSON
-        const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
+        const rawData = xlsx.utils.sheet_to_json(sheet) as Record<string, unknown>[];
+
+        if (!rawData.length) {
+            return NextResponse.json({ error: 'File Excel kosong atau tidak memiliki data.' }, { status: 400 });
+        }
+
+        const sheetKeys = Object.keys(rawData[0] ?? {});
+        const missingColumns = getMissingColumns(sheetKeys, REQUIRED_UPLOAD_COLUMNS);
+
+        if (missingColumns.length > 0) {
+            return NextResponse.json({
+                error: 'File tidak sesuai template. Kolom wajib tidak ditemukan.',
+                missingColumns,
+                expectedColumns: REQUIRED_UPLOAD_COLUMNS,
+            }, { status: 400 });
+        }
+
+        const { validRows, invalidRows, skippedNonActive } = filterValidUploadRows(rawData);
+
+        if (validRows.length === 0) {
+            return NextResponse.json({
+                error: 'Tidak ada data valid yang bisa diproses setelah validasi.',
+                invalidRows,
+                skippedNonActive,
+            }, { status: 400 });
+        }
+
+        const { data: deduplicatedData, duplicatesSkipped } = deduplicateRows(validRows);
+
+        if (deduplicatedData.length === 0) {
+            return NextResponse.json({
+                error: 'Tidak ada data valid yang bisa diproses setelah deduplikasi.',
+                invalidRows,
+                skippedNonActive,
+                duplicatesSkipped,
+            }, { status: 400 });
+        }
+
+        if (duplicatesSkipped > 0) {
+            console.warn(`Duplicate rows skipped during upload: ${duplicatesSkipped}`);
+        }
 
         const masterPath = path.join(process.cwd(), 'EXPORT3.xlsx');
         const masterWorkbook = xlsx.read(fs.readFileSync(masterPath), { raw: true });
-        const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as any[];
-        const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.']).trim(), row]));
-        const masterByName = new Map<string, any[]>();
-        const masterByMandor = new Map<string, any[]>();
+        const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as Record<string, unknown>[];
+        const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.'] ?? '').trim(), row]));
+        const masterByName = new Map<string, Record<string, unknown>[]>();
+        const masterByMandor = new Map<string, Record<string, unknown>[]>();
         masterRows.forEach(row => {
             const name = String(row['Full Name'] || '').trim().toLowerCase();
             const mandor = String(row['Kode Mandor'] || '').trim();
@@ -86,14 +128,14 @@ export async function POST(request: NextRequest) {
         });
 
         // Load secondary master for Kasie
-        let secondaryKasieMap = new Map<string, string>();
+        const secondaryKasieMap = new Map<string, string>();
         try {
             const secondaryPath = path.join(process.cwd(), '17092026B.XLSX');
             if (fs.existsSync(secondaryPath)) {
                 const secWb = xlsx.read(fs.readFileSync(secondaryPath), { raw: true });
-                const secRows = xlsx.utils.sheet_to_json(secWb.Sheets[secWb.SheetNames[0]], { defval: '' }) as any[];
+                const secRows = xlsx.utils.sheet_to_json(secWb.Sheets[secWb.SheetNames[0]], { defval: '' }) as Record<string, unknown>[];
                 secRows.forEach(row => {
-                    const pers = String(row['Pers.No.']).trim();
+                    const pers = String(row['Pers.No.'] ?? '').trim();
                     const kasie = String(row['Kasie'] || '').trim();
                     if (pers && kasie) secondaryKasieMap.set(pers, kasie);
                 });
@@ -103,11 +145,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Fetch mandor mapping
-        const { data: mandorData, error: mandorError } = await supabase
+        const { data: mandorData } = await supabase
             .from('mandor_mapping')
             .select('*');
             
-        const mandorMap: Record<string, any> = {};
+        const mandorMap: Record<string, Record<string, unknown>> = {};
         if (mandorData) {
             mandorData.forEach(m => {
                 mandorMap[m.kit_mandor] = m;
@@ -116,13 +158,13 @@ export async function POST(request: NextRequest) {
 
         let totalHc = 0;
         const villageCounts: Record<string, { count: number; district: string; laki: number; perempuan: number }> = {};
-        const employeeRecords: any[] = [];
+        const employeeRecords: Record<string, unknown>[] = [];
 
-        for (const row of rawData) {
+        for (const row of deduplicatedData) {
             const rawAddr = row['Street and House Number'];
-            const district = row['District'] || '';
-            const status = row['Employment Status'] || '';
-            const gender = normalizeGender(row['Gender Key']);
+            const district = String(row['District'] || '');
+            const status = String(row['Employment Status'] || '');
+            const gender = normalizeGender(String(row['Gender Key'] ?? ''));
 
             // Skip empty rows if necessary
             if (rawAddr === undefined && district === '') continue;
@@ -132,7 +174,7 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
-            const normalizedDesa = normalizeDesa(rawAddr, district);
+            const normalizedDesa = normalizeDesa(String(rawAddr ?? ''), district);
             
             if (!villageCounts[normalizedDesa]) {
                 villageCounts[normalizedDesa] = { count: 0, district: district, laki: 0, perempuan: 0 };
@@ -150,15 +192,18 @@ export async function POST(request: NextRequest) {
             let formattedBirthDate = null;
             const rawBirthDate = row['Birth date'];
             if (rawBirthDate) {
-                let birthDate: Date;
+                let birthDate: Date | null = null;
                 if (typeof rawBirthDate === 'number') {
                     // Excel stores dates as days since Jan 1, 1900
                     birthDate = new Date((rawBirthDate - 25569) * 86400 * 1000);
-                } else {
-                    birthDate = new Date(rawBirthDate);
+                } else if (typeof rawBirthDate === 'string' || typeof rawBirthDate === 'number') {
+                    const parsedDate = new Date(rawBirthDate);
+                    if (!isNaN(parsedDate.getTime())) {
+                        birthDate = parsedDate;
+                    }
                 }
 
-                if (!isNaN(birthDate.getTime())) {
+                if (birthDate && !isNaN(birthDate.getTime())) {
                     const today = new Date();
                     let computedAge = today.getFullYear() - birthDate.getFullYear();
                     const m = today.getMonth() - birthDate.getMonth();
@@ -290,16 +335,49 @@ export async function POST(request: NextRequest) {
             await supabase.from('upload_logs').delete().in('id', idsToDelete);
         }
 
-        // Insert into upload_logs
+        // Insert into upload_logs with optional audit metadata when the schema supports it.
+        const uploadSummary = {
+            duplicatesSkipped,
+            invalidRows,
+            skippedNonActive,
+            validRows: deduplicatedData.length,
+            totalRowsRead: rawData.length,
+        };
+
+        const uploadLogPayload = {
+            filename: file.name,
+            total_hc: totalHc,
+            uploaded_by: 'System Admin',
+            audit_summary: JSON.stringify(uploadSummary),
+        };
+
         const { data: uploadLog, error: uploadError } = await supabase
             .from('upload_logs')
-            .insert({
-                filename: file.name,
-                total_hc: totalHc,
-                uploaded_by: 'System Admin'
-            })
+            .insert(uploadLogPayload)
             .select()
             .single();
+
+        if (uploadError) {
+            console.warn('Extra upload metadata not stored; falling back to minimal log.', uploadError.message);
+            const { data: fallbackUploadLog, error: fallbackUploadError } = await supabase
+                .from('upload_logs')
+                .insert({
+                    filename: file.name,
+                    total_hc: totalHc,
+                    uploaded_by: 'System Admin'
+                })
+                .select()
+                .single();
+
+            if (fallbackUploadError || !fallbackUploadLog) {
+                throw new Error(`Failed to create upload log: ${fallbackUploadError?.message || uploadError.message}`);
+            }
+
+            const fallbackLog = fallbackUploadLog;
+            if (fallbackLog) {
+                console.info('Upload log created without audit metadata.', { uploadId: fallbackLog.id, summary: uploadSummary });
+            }
+        }
 
         if (uploadError || !uploadLog) {
             throw new Error(`Failed to create upload log: ${uploadError?.message}`);
@@ -352,12 +430,17 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ 
             message: 'Data successfully processed', 
-            totalHc, 
-            uploadId 
+            totalHc,
+            uploadId,
+            duplicatesSkipped,
+            validRows: deduplicatedData.length,
+            invalidRows,
+            skippedNonActive,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error processing upload:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

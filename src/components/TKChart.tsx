@@ -192,7 +192,16 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
             {/* KPI CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                 {[
-                    { icon: <Users size={20} />, iconBg: '#eff6ff', iconColor: '#3b82f6', label: 'Total Tenaga Kerja', value: kpis.totalTK.toLocaleString('id-ID'), sub: '' },
+                    {
+                        icon: <Users size={20} />,
+                        iconBg: '#eff6ff',
+                        iconColor: '#3b82f6',
+                        label: selectedKomoditi === 'Semua' ? 'Total Tenaga Kerja' : 'Total TK Komoditi',
+                        value: kpis.totalTK.toLocaleString('id-ID'),
+                        sub: selectedKomoditi === 'Semua'
+                            ? 'Seluruh komoditi'
+                            : `${selectedKomoditi} · dari ${totalKomoditi.toLocaleString('id-ID')} TK semua komoditi`,
+                    },
                     { icon: <Trophy size={20} />, iconBg: '#f0fdf4', iconColor: '#10b981', label: 'Komoditi Terbesar', value: kpis.biggestKomoditi.name, sub: `${kpis.biggestKomoditi.count} TK` },
                     { icon: <Layers size={20} />, iconBg: '#fffbeb', iconColor: '#f59e0b', label: 'Bagian Dominan', value: kpis.biggestBagian.name, sub: `${kpis.biggestBagian.count} TK` },
                     { icon: <MapPin size={20} />, iconBg: '#fdf2f8', iconColor: '#ec4899', label: 'Desa Terbanyak', value: kpis.biggestDesa.name, sub: `${kpis.biggestDesa.count} TK` },

@@ -3,8 +3,13 @@ import DashboardClient from '@/components/DashboardClient';
 
 export const revalidate = 0; // Disable caching to always show latest data
 
-export default async function DashboardPage({ searchParams }: { searchParams: { upload_id?: string } }) {
-    const uploadId = searchParams.upload_id;
+export default async function DashboardPage({
+    searchParams
+}: {
+    searchParams: Promise<{ upload_id?: string }>
+}) {
+    const { upload_id } = await searchParams;
+    const uploadId = upload_id;
 
     // 1. Fetch all uploads for the dropdown
     const { data: allUploads } = await supabase
@@ -31,6 +36,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     // 3. Find previous upload for comparison (the one right before the current in time)
     // Since allUploads is sorted descending, the previous upload is at currentIndex + 1
     const previousUpload = currentIndex + 1 < allUploads.length ? allUploads[currentIndex + 1] : null;
+
+    const unknownDomicileQueries = await Promise.all([
+        supabase
+            .from('employee_domisili')
+            .select('id', { count: 'exact', head: true })
+            .eq('upload_id', currentUpload.id)
+            .eq('nama_desa', 'Tidak Diketahui'),
+        ...['', '-', '.', '0'].map(address => supabase
+            .from('employee_domisili')
+            .select('id', { count: 'exact', head: true })
+            .eq('upload_id', currentUpload.id)
+            .eq('street_address', address)
+            .neq('nama_desa', 'Tidak Diketahui')),
+        supabase
+            .from('employee_domisili')
+            .select('id', { count: 'exact', head: true })
+            .eq('upload_id', currentUpload.id)
+            .is('street_address', null)
+            .neq('nama_desa', 'Tidak Diketahui'),
+    ]);
+    const unknownDomicileCount = unknownDomicileQueries.every(result => !result.error)
+        ? unknownDomicileQueries.reduce((total, result) => total + (result.count || 0), 0)
+        : null;
 
     // 4. Fetch summary_domisili for this upload
     const { data: villages, error: villagesError } = await supabase
@@ -73,10 +101,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         : { name: '-', percentage: 0 };
 
     const diffHc = previousUpload ? (currentUpload.total_hc - previousUpload.total_hc) : 0;
+    const diffPercent = previousUpload && previousUpload.total_hc
+        ? (diffHc / previousUpload.total_hc) * 100
+        : 0;
 
     const dashboardData = {
         totalHc: currentUpload.total_hc,
-        diffHc, // New comparison diff
+        unknownDomicileCount,
+        diffHc,
+        diffPercent,
+        previousUploadDate: previousUpload?.uploaded_at ?? null,
         totalVillages,
         dominantDistrict,
         lastUpdated: currentUpload.uploaded_at,
