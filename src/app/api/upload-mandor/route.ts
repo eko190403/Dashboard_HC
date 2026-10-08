@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         const sheet = workbook.Sheets[sheetName];
         
         // Convert to JSON
-        const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
+        const rawData = xlsx.utils.sheet_to_json(sheet) as Record<string, unknown>[];
 
         if (rawData.length === 0) {
             return NextResponse.json({ error: 'File Excel kosong.' }, { status: 400 });
@@ -52,12 +52,13 @@ export async function POST(request: NextRequest) {
             uniqueMap[m.kit_mandor] = m;
         }
         const uniqueMappings = Object.values(uniqueMap);
+        const supabaseAdmin = getSupabaseAdmin();
 
         // Batch upsert to Supabase
         const CHUNK_SIZE = 1000;
         for (let i = 0; i < uniqueMappings.length; i += CHUNK_SIZE) {
             const chunk = uniqueMappings.slice(i, i + CHUNK_SIZE);
-            const { error: upsertError } = await supabase
+            const { error: upsertError } = await supabaseAdmin
                 .from('mandor_mapping')
                 .upsert(chunk, { onConflict: 'kit_mandor' });
 
@@ -72,8 +73,9 @@ export async function POST(request: NextRequest) {
             totalRows: uniqueMappings.length
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error processing mandor upload:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

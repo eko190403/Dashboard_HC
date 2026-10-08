@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
-import { supabase } from '@/lib/supabase';
 import { getEmployeeMasterLookups } from '@/lib/employee-master';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
@@ -51,12 +50,13 @@ export async function POST(request: NextRequest) {
 
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
+        const supabaseAdmin = getSupabaseAdmin();
 
         // Upload original file to Supabase Storage Bucket 'excel-backups' if needed
         // For now, we will process it first
         const filename = `${Date.now()}_${file.name}`;
         
-        const { error: storageError } = await supabase.storage
+        const { error: storageError } = await supabaseAdmin.storage
             .from('excel-backups')
             .upload(filename, buffer, {
                 contentType: file.type,
@@ -295,21 +295,44 @@ export async function POST(request: NextRequest) {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-        const { data: existingUploads, error: checkError } = await supabase
+        const { data: existingUploads, error: checkError } = await supabaseAdmin
             .from('upload_logs')
             .select('id')
             .gte('uploaded_at', startOfMonth)
             .lte('uploaded_at', endOfMonth);
 
-        if (!checkError && existingUploads && existingUploads.length > 0) {
+        if (checkError) {
+            throw new Error(`Failed to check existing uploads: ${checkError.message}`);
+        }
+
+        if (existingUploads && existingUploads.length > 0) {
             const idsToDelete = existingUploads.map(u => u.id);
             
             // Delete related records manually to be safe (if no cascade)
-            await supabase.from('employee_domisili').delete().in('upload_id', idsToDelete);
-            await supabase.from('summary_domisili').delete().in('upload_id', idsToDelete);
+            const { error: employeeDeleteError } = await supabaseAdmin
+                .from('employee_domisili')
+                .delete()
+                .in('upload_id', idsToDelete);
+            if (employeeDeleteError) {
+                throw new Error(`Failed to delete existing employee data: ${employeeDeleteError.message}`);
+            }
+
+            const { error: summaryDeleteError } = await supabaseAdmin
+                .from('summary_domisili')
+                .delete()
+                .in('upload_id', idsToDelete);
+            if (summaryDeleteError) {
+                throw new Error(`Failed to delete existing summary data: ${summaryDeleteError.message}`);
+            }
             
             // Delete the upload logs
-            await supabase.from('upload_logs').delete().in('id', idsToDelete);
+            const { error: logDeleteError } = await supabaseAdmin
+                .from('upload_logs')
+                .delete()
+                .in('id', idsToDelete);
+            if (logDeleteError) {
+                throw new Error(`Failed to delete existing upload logs: ${logDeleteError.message}`);
+            }
         }
 
         // Insert into upload_logs with optional audit metadata when the schema supports it.
@@ -328,7 +351,7 @@ export async function POST(request: NextRequest) {
             audit_summary: JSON.stringify(uploadSummary),
         };
 
-        let { data: uploadLog, error: uploadError } = await supabase
+        let { data: uploadLog, error: uploadError } = await supabaseAdmin
             .from('upload_logs')
             .insert(uploadLogPayload)
             .select()
@@ -336,7 +359,7 @@ export async function POST(request: NextRequest) {
 
         if (uploadError) {
             console.warn('Extra upload metadata not stored; falling back to minimal log.', uploadError.message);
-            const { data: fallbackUploadLog, error: fallbackUploadError } = await supabase
+            const { data: fallbackUploadLog, error: fallbackUploadError } = await supabaseAdmin
                 .from('upload_logs')
                 .insert({
                     filename: file.name,
@@ -380,7 +403,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Bulk insert into summary_domisili
-        const { error: summaryError } = await supabase
+        const { error: summaryError } = await supabaseAdmin
             .from('summary_domisili')
             .insert(summaryData);
 
@@ -398,7 +421,7 @@ export async function POST(request: NextRequest) {
         const CHUNK_SIZE = 1000;
         for (let i = 0; i < employeeDataToInsert.length; i += CHUNK_SIZE) {
             const chunk = employeeDataToInsert.slice(i, i + CHUNK_SIZE);
-            const { error: empError } = await supabase
+            const { error: empError } = await supabaseAdmin
                 .from('employee_domisili')
                 .insert(chunk);
             if (empError) {

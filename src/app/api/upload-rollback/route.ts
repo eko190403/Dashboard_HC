@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function DELETE(request: NextRequest) {
     try {
+        const supabaseAdmin = getSupabaseAdmin();
         const { searchParams } = new URL(request.url);
         const uploadId = searchParams.get('id');
 
@@ -11,7 +12,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         // Delete from employee_domisili
-        const { error: empError } = await supabase
+        const { error: empError } = await supabaseAdmin
             .from('employee_domisili')
             .delete()
             .eq('upload_id', uploadId);
@@ -19,7 +20,7 @@ export async function DELETE(request: NextRequest) {
         if (empError) throw new Error(`Failed to delete employee data: ${empError.message}`);
 
         // Delete from summary_domisili
-        const { error: summaryError } = await supabase
+        const { error: summaryError } = await supabaseAdmin
             .from('summary_domisili')
             .delete()
             .eq('upload_id', uploadId);
@@ -27,7 +28,7 @@ export async function DELETE(request: NextRequest) {
         if (summaryError) throw new Error(`Failed to delete summary data: ${summaryError.message}`);
 
         // Delete from upload_logs
-        const { error: logError } = await supabase
+        const { error: logError } = await supabaseAdmin
             .from('upload_logs')
             .delete()
             .eq('id', uploadId);
@@ -36,8 +37,9 @@ export async function DELETE(request: NextRequest) {
 
         return NextResponse.json({ success: true, message: 'Upload successfully rolled back.' });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error rolling back upload:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

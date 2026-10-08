@@ -22,12 +22,14 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 Upload processing reads employee lookups from Supabase; it no longer reads `EXPORT3.xlsx` or `17092026B.XLSX` from the application filesystem.
 
-1. Apply `supabase/migrations/20261008000000_create_employee_master.sql` to the Supabase project.
+1. Apply the SQL migrations in `supabase/migrations/` to the Supabase project, in filename order.
 2. Import the employee master data into `public.employee_master` using the Supabase Table Editor CSV import. Use these column names: `personnel_number`, `full_name`, `mandor_code`, `mandor_name`, `kasie`, `choice`, and `subdep`. The personnel number is the primary key.
 3. Merge the latest Kasie values from the secondary workbook into the `kasie` column by `personnel_number` before importing.
 4. Set `SUPABASE_SERVICE_ROLE_KEY` as a server-only environment variable in local `.env.local` and the deployment environment. Never expose it with a `NEXT_PUBLIC_` prefix.
 
 Row-level security is enabled on `employee_master` without public policies. The upload route reads it with the server-only service-role client. Keep employee master exports out of Git.
+
+The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; browser reads continue using the anon key.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

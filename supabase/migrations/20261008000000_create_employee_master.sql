@@ -17,7 +17,7 @@ create index if not exists employee_master_full_name_idx
 
 alter table public.employee_master enable row level security;
 
-revoke all on table public.employee_master from anon, authenticated;
+revoke all on table public.employee_master from public, anon, authenticated;
 grant select on table public.employee_master to service_role;
 
 notify pgrst, 'reload schema';
