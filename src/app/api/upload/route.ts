@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
-import path from 'node:path';
-import fs from 'node:fs';
 import { supabase } from '@/lib/supabase';
+import { getEmployeeMasterLookups } from '@/lib/employee-master';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
 import { deduplicateRows } from '@/lib/duplicate-check';
 import { filterValidUploadRows, getMissingColumns, REQUIRED_UPLOAD_COLUMNS } from '@/lib/upload-validation';
@@ -114,40 +114,17 @@ export async function POST(request: NextRequest) {
             console.warn(`Duplicate rows skipped during upload: ${duplicatesSkipped}`);
         }
 
-        const masterPath = path.join(process.cwd(), 'EXPORT3.xlsx');
-        const masterWorkbook = xlsx.read(fs.readFileSync(masterPath), { raw: true });
-        const masterRows = xlsx.utils.sheet_to_json(masterWorkbook.Sheets[masterWorkbook.SheetNames[0]], { defval: '' }) as Record<string, unknown>[];
-        const masterByPersonnel = new Map(masterRows.map(row => [String(row['Pers.No.'] ?? '').trim(), row]));
-        const masterByName = new Map<string, Record<string, unknown>[]>();
-        const masterByMandor = new Map<string, Record<string, unknown>[]>();
-        masterRows.forEach(row => {
-            const name = String(row['Full Name'] || '').trim().toLowerCase();
-            const mandor = String(row['Kode Mandor'] || '').trim();
-            if (name) masterByName.set(name, [...(masterByName.get(name) || []), row]);
-            if (mandor && mandor !== '0') masterByMandor.set(mandor, [...(masterByMandor.get(mandor) || []), row]);
-        });
-
-        // Load secondary master for Kasie
-        const secondaryKasieMap = new Map<string, string>();
-        try {
-            const secondaryPath = path.join(process.cwd(), '17092026B.XLSX');
-            if (fs.existsSync(secondaryPath)) {
-                const secWb = xlsx.read(fs.readFileSync(secondaryPath), { raw: true });
-                const secRows = xlsx.utils.sheet_to_json(secWb.Sheets[secWb.SheetNames[0]], { defval: '' }) as Record<string, unknown>[];
-                secRows.forEach(row => {
-                    const pers = String(row['Pers.No.'] ?? '').trim();
-                    const kasie = String(row['Kasie'] || '').trim();
-                    if (pers && kasie) secondaryKasieMap.set(pers, kasie);
-                });
-            }
-        } catch (e) {
-            console.warn('Failed to load secondary Kasie map:', e);
-        }
+        const { byPersonnel: masterByPersonnel, byName: masterByName, byMandor: masterByMandor } =
+            await getEmployeeMasterLookups();
 
         // Fetch mandor mapping
-        const { data: mandorData } = await supabase
+        const { data: mandorData, error: mandorError } = await getSupabaseAdmin()
             .from('mandor_mapping')
-            .select('*');
+            .select('kit_mandor,nama_mandor,kasi');
+
+        if (mandorError) {
+            throw new Error(`Failed to load mandor mapping: ${mandorError.message}`);
+        }
             
         const mandorMap: Record<string, Record<string, unknown>> = {};
         if (mandorData) {
@@ -226,23 +203,23 @@ export async function POST(request: NextRequest) {
             const mandorCode = String(row['Kode Mandor'] || '').trim();
             const nameMatches = masterByName.get(employeeName) || [];
             const mandorMatches = masterByMandor.get(mandorCode) || [];
-            const mandorPairs = new Set(mandorMatches.map(item => `${item.Choice}|${item.Subdep}`));
+            const mandorPairs = new Set(mandorMatches.map(item => `${item.choice}|${item.subdep}`));
             const masterRow = masterByPersonnel.get(personnelNumber)
                 || (nameMatches.length === 1 ? nameMatches[0] : undefined)
                 || (mandorPairs.size === 1 ? mandorMatches[0] : undefined);
             
             // Hapus spasi ganda dan spasi di ujung agar terhindar dari duplikat
-            const masterDepartment = String(masterRow?.Subdep || '')
+            const masterDepartment = String(masterRow?.subdep || '')
                 .replace(/\s+/g, ' ')
                 .trim();
                 
-            const masterChoice = String(masterRow?.Choice || '').trim();
+            const masterChoice = String(masterRow?.choice || '').trim();
 
             let komoditi: string;
             let bagian: string;
 
             if (masterChoice) {
-                // Pakai Choice dari EXPORT3.xlsx sebagai komoditi
+                // Use the employee master Choice as the commodity.
                 komoditi = masterChoice;
             } else {
                 // Fallback: derive dari SAP columns
@@ -250,7 +227,7 @@ export async function POST(request: NextRequest) {
             }
 
             if (masterDepartment) {
-                // Pakai Subdep dari EXPORT3.xlsx sebagai bagian
+                // Use the employee master Subdep as the department.
                 bagian = masterDepartment;
             } else {
                 // Fallback: derive dari SAP columns
@@ -270,7 +247,7 @@ export async function POST(request: NextRequest) {
                     bagian = 'Planting PG2';
                 }
             }
-            const kitMandor = String(masterRow?.['Kode Mandor'] || row['Kode Mandor'] || '').trim();
+            const kitMandor = String(masterRow?.mandor_code || row['Kode Mandor'] || '').trim();
             const mappedMandor = mandorMap[kitMandor] || {};
 
             employeeRecords.push({
@@ -286,8 +263,8 @@ export async function POST(request: NextRequest) {
                 bagian,
                 kit_tk: personnelNumber,
                 kit_mandor: kitMandor,
-                nama_mandor: masterRow?.['Nama Mandor'] || mappedMandor.nama_mandor || '-',
-                kasi: secondaryKasieMap.get(personnelNumber) || masterRow?.Kasie || mappedMandor.kasi || '-',
+                nama_mandor: masterRow?.mandor_name || mappedMandor.nama_mandor || '-',
+                kasi: masterRow?.kasie || mappedMandor.kasi || '-',
                 indeks_tk: personnelNumber || '-',
             });
         }
