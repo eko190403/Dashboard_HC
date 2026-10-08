@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
 import { getEmployeeMasterLookups } from '@/lib/employee-master';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { authorizeWriteRequest } from '@/lib/auth-server';
 import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
 import { deduplicateRows } from '@/lib/duplicate-check';
 import { filterValidUploadRows, getMissingColumns, REQUIRED_UPLOAD_COLUMNS } from '@/lib/upload-validation';
@@ -40,6 +41,9 @@ function getKomoditiAndBagian(row: Record<string, unknown>): { komoditi: string;
 }
 
 export async function POST(request: NextRequest) {
+    const authorization = authorizeWriteRequest(request, ['People Partner', 'HR Manager']);
+    if ('response' in authorization) return authorization.response;
+
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File;

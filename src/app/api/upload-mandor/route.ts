@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as xlsx from 'xlsx';
+import { authorizeWriteRequest } from '@/lib/auth-server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(request: NextRequest) {
+    const authorization = authorizeWriteRequest(request, ['People Partner', 'HR Manager']);
+    if ('response' in authorization) return authorization.response;
+
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File;

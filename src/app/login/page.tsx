@@ -3,7 +3,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
-import { login, isAuthenticated } from '@/lib/auth';
+import { hasValidSession, login } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,19 +15,31 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (isAuthenticated()) router.replace('/');
+    let active = true;
+    hasValidSession()
+      .then(isValid => {
+        if (active && isValid) router.replace('/');
+      })
+      .catch(() => {
+        if (active) setError('Layanan autentikasi tidak tersedia.');
+      });
+    return () => { active = false; };
   }, [router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-    const user = login(username, password);
-    if (user) {
-      router.replace('/');
-    } else {
-      setError('Username atau password salah. Silakan coba lagi.');
+    try {
+      const user = await login(username, password);
+      if (user) {
+        router.replace('/');
+      } else {
+        setError('Username atau password salah. Silakan coba lagi.');
+      }
+    } catch {
+      setError('Login gagal karena layanan autentikasi tidak tersedia.');
+    } finally {
       setLoading(false);
     }
   };
@@ -195,15 +207,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Demo credentials */}
-        <div style={{
-          marginTop: 24, padding: '12px 16px',
-          background: '#f8fafc', borderRadius: 10,
-          border: '1px dashed #cbd5e1', fontSize: 12,
-          color: '#64748b', textAlign: 'center', lineHeight: 1.8,
-        }}>
-          💡 Demo login: <span style={{ fontFamily: 'monospace', background: '#e2e8f0', padding: '1px 6px', borderRadius: 4 }}>admin</span> / <span style={{ fontFamily: 'monospace', background: '#e2e8f0', padding: '1px 6px', borderRadius: 4 }}>admin123</span>
-        </div>
       </div>
     </div>
   );

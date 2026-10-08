@@ -31,9 +31,15 @@ export default function TopBar() {
   // Don't render on login page
   if (pathname === '/login') return null;
 
-  const handleLogout = () => {
-    logout();
-    router.replace('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setUser(null);
+      router.replace('/login');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gagal mengakhiri sesi.';
+      alert(message);
+    }
   };
 
   if (!user) return null;

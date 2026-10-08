@@ -2,23 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { isAuthenticated } from '@/lib/auth';
+import { hasValidSession } from '@/lib/auth';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
+  const [authenticatedPath, setAuthenticatedPath] = useState<string | null>(null);
 
   useEffect(() => {
-    if (pathname === '/login') {
-      setReady(true);
-      return;
-    }
-    if (!isAuthenticated()) {
-      router.replace('/login');
-    } else {
-      setReady(true);
-    }
+    let active = true;
+    if (pathname === '/login') return () => { active = false; };
+    hasValidSession()
+      .then(isValid => {
+        if (!active) return;
+        if (!isValid) router.replace('/login');
+        else setAuthenticatedPath(pathname);
+      })
+      .catch(() => {
+        if (active) router.replace('/login');
+      });
+    return () => { active = false; };
   }, [pathname, router]);
 
   // On login page, always render immediately (login covers everything)
@@ -27,7 +30,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   // On protected pages, show loading until auth is confirmed
-  if (!ready) {
+  if (authenticatedPath !== pathname) {
     return (
       <div style={{
         position: 'fixed', inset: 0, zIndex: 9998,

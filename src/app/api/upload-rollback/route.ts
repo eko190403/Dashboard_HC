@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeWriteRequest } from '@/lib/auth-server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function DELETE(request: NextRequest) {
+    const authorization = authorizeWriteRequest(request, ['People Partner', 'HR Manager']);
+    if ('response' in authorization) return authorization.response;
+
     try {
         const supabaseAdmin = getSupabaseAdmin();
         const { searchParams } = new URL(request.url);

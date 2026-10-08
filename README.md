@@ -31,6 +31,38 @@ Row-level security is enabled on `employee_master` without public policies. The 
 
 The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; upload replacement runs in a single PostgreSQL transaction through `replace_monthly_upload`. Browser reads continue using the anon key.
 
+## Authentication setup
+
+The application uses signed, HTTP-only sessions. Configure `AUTH_SESSION_SECRET` with at least 32 random bytes and `HR_USERS_JSON` with the permitted accounts in each server environment. Do not add either variable with a `NEXT_PUBLIC_` prefix or commit their values.
+
+Generate a session secret with:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Generate each password hash by running `node scripts/hash-password.mjs` in an interactive terminal. It prompts for a password without echoing it and outputs a `scrypt$salt$digest` hash. Use passwords of at least 12 characters.
+
+The previous demo passwords were embedded in earlier application versions. Treat them as compromised and do not reuse them.
+
+Set `HR_USERS_JSON` to a JSON array with one entry per account. Each entry must include `username`, `name`, `role`, `initials`, and `passwordHash`. Supported roles are `People Partner`, `HR Manager`, and `Staff`. For example, after replacing the hash placeholder with the output from the hash script:
+
+```json
+[
+  {
+    "username": "people-partner",
+    "name": "People Partner",
+    "role": "People Partner",
+    "initials": "PP",
+    "passwordHash": "scrypt$replace-with-32-hex-salt$replace-with-128-hex-digest"
+  }
+]
+```
+
+All application pages and data APIs require a valid signed session. Only `People Partner` and `HR Manager` may upload data, import mandor mappings, or roll back uploads. Rotate `AUTH_SESSION_SECRET` to invalidate all active sessions.
+
+The login UI no longer contains demo credentials. Remove any previously disclosed or reused passwords and configure new password hashes before enabling the application.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More
