@@ -29,7 +29,7 @@ Upload processing reads employee lookups from Supabase; it no longer reads `EXPO
 
 Row-level security is enabled on `employee_master` without public policies. The upload route reads it with the server-only service-role client. Keep employee master exports out of Git.
 
-The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; browser reads continue using the anon key.
+The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; upload replacement runs in a single PostgreSQL transaction through `replace_monthly_upload`. Browser reads continue using the anon key.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

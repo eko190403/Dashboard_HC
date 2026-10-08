@@ -290,52 +290,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Check for existing uploads in the same month and year
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-
-        const { data: existingUploads, error: checkError } = await supabaseAdmin
-            .from('upload_logs')
-            .select('id')
-            .gte('uploaded_at', startOfMonth)
-            .lte('uploaded_at', endOfMonth);
-
-        if (checkError) {
-            throw new Error(`Failed to check existing uploads: ${checkError.message}`);
-        }
-
-        if (existingUploads && existingUploads.length > 0) {
-            const idsToDelete = existingUploads.map(u => u.id);
-            
-            // Delete related records manually to be safe (if no cascade)
-            const { error: employeeDeleteError } = await supabaseAdmin
-                .from('employee_domisili')
-                .delete()
-                .in('upload_id', idsToDelete);
-            if (employeeDeleteError) {
-                throw new Error(`Failed to delete existing employee data: ${employeeDeleteError.message}`);
-            }
-
-            const { error: summaryDeleteError } = await supabaseAdmin
-                .from('summary_domisili')
-                .delete()
-                .in('upload_id', idsToDelete);
-            if (summaryDeleteError) {
-                throw new Error(`Failed to delete existing summary data: ${summaryDeleteError.message}`);
-            }
-            
-            // Delete the upload logs
-            const { error: logDeleteError } = await supabaseAdmin
-                .from('upload_logs')
-                .delete()
-                .in('id', idsToDelete);
-            if (logDeleteError) {
-                throw new Error(`Failed to delete existing upload logs: ${logDeleteError.message}`);
-            }
-        }
-
-        // Insert into upload_logs with optional audit metadata when the schema supports it.
         const uploadSummary = {
             duplicatesSkipped,
             invalidRows,
@@ -344,54 +298,10 @@ export async function POST(request: NextRequest) {
             totalRowsRead: rawData.length,
         };
 
-        const uploadLogPayload = {
-            filename: file.name,
-            total_hc: totalHc,
-            uploaded_by: 'System Admin',
-            audit_summary: JSON.stringify(uploadSummary),
-        };
-
-        let { data: uploadLog, error: uploadError } = await supabaseAdmin
-            .from('upload_logs')
-            .insert(uploadLogPayload)
-            .select()
-            .single();
-
-        if (uploadError) {
-            console.warn('Extra upload metadata not stored; falling back to minimal log.', uploadError.message);
-            const { data: fallbackUploadLog, error: fallbackUploadError } = await supabaseAdmin
-                .from('upload_logs')
-                .insert({
-                    filename: file.name,
-                    total_hc: totalHc,
-                    uploaded_by: 'System Admin'
-                })
-                .select()
-                .single();
-
-            if (fallbackUploadError || !fallbackUploadLog) {
-                throw new Error(`Failed to create upload log: ${fallbackUploadError?.message || uploadError.message}`);
-            }
-
-            uploadLog = fallbackUploadLog;
-            uploadError = null;
-            const fallbackLog = fallbackUploadLog;
-            if (fallbackLog) {
-                console.info('Upload log created without audit metadata.', { uploadId: fallbackLog.id, summary: uploadSummary });
-            }
-        }
-
-        if (!uploadLog) {
-            throw new Error('Failed to create upload log: no row returned');
-        }
-
-        const uploadId = uploadLog.id;
-
         // Prepare data for summary_domisili
         const summaryData = Object.entries(finalCounts).map(([desa, data]) => {
             const persentase = ((data.count / totalHc) * 100).toFixed(2);
             return {
-                upload_id: uploadId,
                 nama_desa: desa,
                 kecamatan: data.district,
                 jumlah_tk: data.count,
@@ -402,32 +312,22 @@ export async function POST(request: NextRequest) {
             };
         });
 
-        // Bulk insert into summary_domisili
-        const { error: summaryError } = await supabaseAdmin
-            .from('summary_domisili')
-            .insert(summaryData);
+        const { data: uploadResult, error: uploadError } = await supabaseAdmin.rpc('replace_monthly_upload', {
+            p_filename: file.name,
+            p_total_hc: totalHc,
+            p_uploaded_by: 'System Admin',
+            p_audit_summary: uploadSummary,
+            p_summary_data: summaryData,
+            p_employee_data: employeeRecords,
+        });
 
-        if (summaryError) {
-            throw new Error(`Failed to insert summary data: ${summaryError?.message}`);
+        if (uploadError) {
+            throw new Error(`Failed to save upload transaction: ${uploadError.message}`);
         }
 
-        // Prepare and insert employee data
-        const employeeDataToInsert = employeeRecords.map(emp => ({
-            ...emp,
-            upload_id: uploadId
-        }));
-
-        // Batch insert in chunks of 1000
-        const CHUNK_SIZE = 1000;
-        for (let i = 0; i < employeeDataToInsert.length; i += CHUNK_SIZE) {
-            const chunk = employeeDataToInsert.slice(i, i + CHUNK_SIZE);
-            const { error: empError } = await supabaseAdmin
-                .from('employee_domisili')
-                .insert(chunk);
-            if (empError) {
-                console.error('Failed to insert employee chunk:', empError);
-                throw new Error(`Failed to insert employee data: ${empError?.message}`);
-            }
+        const uploadId = (uploadResult as { upload_id?: unknown } | null)?.upload_id;
+        if (typeof uploadId !== 'number' && typeof uploadId !== 'string') {
+            throw new Error('Upload transaction completed without returning an upload ID.');
         }
 
         return NextResponse.json({ 
