@@ -351,7 +351,7 @@ export async function POST(request: NextRequest) {
             audit_summary: JSON.stringify(uploadSummary),
         };
 
-        const { data: uploadLog, error: uploadError } = await supabase
+        let { data: uploadLog, error: uploadError } = await supabase
             .from('upload_logs')
             .insert(uploadLogPayload)
             .select()
@@ -373,14 +373,16 @@ export async function POST(request: NextRequest) {
                 throw new Error(`Failed to create upload log: ${fallbackUploadError?.message || uploadError.message}`);
             }
 
+            uploadLog = fallbackUploadLog;
+            uploadError = null;
             const fallbackLog = fallbackUploadLog;
             if (fallbackLog) {
                 console.info('Upload log created without audit metadata.', { uploadId: fallbackLog.id, summary: uploadSummary });
             }
         }
 
-        if (uploadError || !uploadLog) {
-            throw new Error(`Failed to create upload log: ${uploadError?.message}`);
+        if (!uploadLog) {
+            throw new Error('Failed to create upload log: no row returned');
         }
 
         const uploadId = uploadLog.id;
