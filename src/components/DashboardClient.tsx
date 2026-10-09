@@ -13,6 +13,7 @@ import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
 import HCTrendChart from './HCTrendChart';
+import { getEffectiveMonthLabel, getUploadMonthLabel } from '@/lib/reporting-month';
 
 interface DashboardData {
     totalHc: number;
@@ -249,6 +250,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <Users size={20} />,
             iconBg: '#e9f0fc', iconColor: '#1e5fd4',
             borderColor: '#1e5fd4',
+            href: currentUploadId ? `/desa-lainnya?upload_id=${encodeURIComponent(String(currentUploadId))}` : undefined,
         },
         {
             label: 'Total Desa',
@@ -312,13 +314,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         >
                             {allUploads.map(upload => (
                                 <option key={upload.id} value={upload.id}>
-                                    Data {new Date(upload.uploaded_at).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                                    {getEffectiveMonthLabel(upload.uploaded_at)}
                                 </option>
                             ))}
                         </select>
                     </div>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5a7184' }}>
-                        PG 2 Estate — Update terakhir: {new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        PG 2 Estate — Bulan laporan: <strong>{getEffectiveMonthLabel(initialData.lastUpdated)}</strong> • Upload aktual: {getUploadMonthLabel(initialData.lastUpdated)}
                     </p>
                     <div style={{
                         marginTop: 10,
@@ -350,28 +352,40 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
 
             {/* ===== KPI CARDS ===== */}
             <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                {kpiCards.map((card, i) => (
-                    <div key={i} className="kpi-card animate-in" style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms` }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-                            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#5a7184', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                {card.label}
-                            </p>
-                            <div style={{
-                                width: 36, height: 36, borderRadius: 8,
-                                background: card.iconBg, color: card.iconColor,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                flexShrink: 0,
-                            }}>
-                                {card.icon}
+                {kpiCards.map((card, i) => {
+                    const cardContent = (
+                        <div key={i} className="kpi-card animate-in" style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms`, cursor: card.href ? 'pointer' : 'default' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+                                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#5a7184', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    {card.label}
+                                </p>
+                                <div style={{
+                                    width: 36, height: 36, borderRadius: 8,
+                                    background: card.iconBg, color: card.iconColor,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    {card.icon}
+                                </div>
                             </div>
+                            <div style={{ fontSize: i === 2 ? 16 : 26, fontWeight: 700, color: '#1a2b4a', lineHeight: 1.2, marginBottom: 4 }}>
+                                {card.value}
+                            </div>
+                            <div style={{ fontSize: 12, color: card.subColor, fontWeight: 500 }}>{card.sub}</div>
                         </div>
-                        <div style={{ fontSize: i === 2 ? 16 : 26, fontWeight: 700, color: '#1a2b4a', lineHeight: 1.2, marginBottom: 4 }}>
-                            {card.value}
-                        </div>
-                        <div style={{ fontSize: 12, color: card.subColor, fontWeight: 500 }}>{card.sub}</div>
-                    </div>
-                ))}
-                
+                    );
+
+                    if (card.href) {
+                        return (
+                            <Link key={i} href={card.href} style={{ textDecoration: 'none' }}>
+                                {cardContent}
+                            </Link>
+                        );
+                    }
+
+                    return cardContent;
+                })}
+
                 {/* Mini HC Trend replacing Update Terakhir */}
                 <div className="kpi-card animate-in" style={{ borderTop: `3px solid #1e5fd4`, animationDelay: `180ms`, padding: 0, overflow: 'hidden' }}>
                     <HCTrendChart variant="mini" />

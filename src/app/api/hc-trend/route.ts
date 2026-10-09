@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { getEffectiveMonthKey, getEffectiveMonthLabel } from '@/lib/reporting-month';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +18,12 @@ export async function GET(request: NextRequest) {
         const monthMap = new Map<string, { total_hc: number; uploaded_at: string; month: string; label: string }>();
 
         (uploads || []).forEach(upload => {
-            const date = new Date(upload.uploaded_at);
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            const label = date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+            const monthKey = getEffectiveMonthKey(upload.uploaded_at);
+            if (!monthKey) return;
 
-            // Keep only the latest upload per month
+            const label = getEffectiveMonthLabel(upload.uploaded_at);
+
+            // Keep only the latest upload for the same reporting month
             const existing = monthMap.get(monthKey);
             if (!existing || new Date(upload.uploaded_at) > new Date(existing.uploaded_at)) {
                 monthMap.set(monthKey, {

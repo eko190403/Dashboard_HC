@@ -7,7 +7,8 @@ create or replace function public.replace_monthly_upload(
     p_uploaded_by text,
     p_audit_summary jsonb,
     p_summary_data jsonb,
-    p_employee_data jsonb
+    p_employee_data jsonb,
+    p_report_month text default null
 )
 returns jsonb
 language plpgsql
@@ -16,7 +17,7 @@ set search_path = ''
 as $function$
 declare
     v_upload_id public.upload_logs.id%TYPE;
-    v_month_start timestamptz := pg_catalog.date_trunc('month', pg_catalog.clock_timestamp());
+    v_month_start timestamptz;
     v_next_month timestamptz;
 begin
     if p_filename is null or pg_catalog.btrim(p_filename) = '' then
@@ -48,7 +49,12 @@ begin
         raise exception 'Summary totals do not match total HC';
     end if;
 
-    v_month_start := pg_catalog.date_trunc('month', pg_catalog.clock_timestamp());
+    if p_report_month is not null and pg_catalog.btrim(p_report_month) <> '' then
+        v_month_start := pg_catalog.date_trunc('month', to_date(p_report_month, 'YYYY-MM'));
+    else
+        v_month_start := pg_catalog.date_trunc('month', pg_catalog.clock_timestamp());
+    end if;
+
     v_next_month := v_month_start + interval '1 month';
 
     perform pg_catalog.pg_advisory_xact_lock(
@@ -71,8 +77,8 @@ begin
     where uploaded_at >= v_month_start
         and uploaded_at < v_next_month;
 
-    insert into public.upload_logs (filename, total_hc, uploaded_by, audit_summary)
-    values (p_filename, p_total_hc, p_uploaded_by, p_audit_summary::text)
+    insert into public.upload_logs (filename, total_hc, uploaded_by, audit_summary, uploaded_at)
+    values (p_filename, p_total_hc, p_uploaded_by, p_audit_summary::text, v_month_start)
     returning id into v_upload_id;
 
     insert into public.summary_domisili (
@@ -161,9 +167,9 @@ begin
 end;
 $function$;
 
-revoke all on function public.replace_monthly_upload(text, integer, text, jsonb, jsonb, jsonb)
+revoke all on function public.replace_monthly_upload(text, integer, text, jsonb, jsonb, jsonb, text)
     from public, anon, authenticated;
-grant execute on function public.replace_monthly_upload(text, integer, text, jsonb, jsonb, jsonb)
+grant execute on function public.replace_monthly_upload(text, integer, text, jsonb, jsonb, jsonb, text)
     to service_role;
 
 notify pgrst, 'reload schema';

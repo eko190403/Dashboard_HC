@@ -47,9 +47,20 @@ export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File;
+        const reportMonth = String(formData.get('report_month') ?? '').trim();
 
         if (!file) {
             return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+        }
+
+        if (reportMonth && !/^\d{4}-\d{2}$/.test(reportMonth)) {
+            return NextResponse.json({ error: 'Format bulan upload tidak valid.' }, { status: 400 });
+        }
+
+        const normalizedReportMonth = reportMonth || new Date().toISOString().slice(0, 7);
+        const reportMonthDate = new Date(`${normalizedReportMonth}-01T00:00:00`);
+        if (Number.isNaN(reportMonthDate.getTime())) {
+            return NextResponse.json({ error: 'Bulan upload tidak valid.' }, { status: 400 });
         }
 
         const bytes = await file.arrayBuffer();
@@ -323,6 +334,7 @@ export async function POST(request: NextRequest) {
             p_audit_summary: uploadSummary,
             p_summary_data: summaryData,
             p_employee_data: employeeRecords,
+            p_report_month: normalizedReportMonth,
         });
 
         if (uploadError) {

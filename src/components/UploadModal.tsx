@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Upload, X, FileSpreadsheet, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface UploadModalProps {
@@ -11,11 +11,29 @@ interface UploadModalProps {
 
 export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     const [file, setFile] = useState<File | null>(null);
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isDone, setIsDone] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const monthOptions = useMemo(() => {
+        const options: { value: string; label: string }[] = [];
+        const now = new Date();
+
+        for (let i = 11; i >= 0; i -= 1) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const label = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            options.push({ value, label });
+        }
+
+        return options;
+    }, []);
 
     const formatUploadSummary = (data: Record<string, unknown>) => {
         const summaryParts: string[] = [];
@@ -75,12 +93,27 @@ export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalP
         }
     };
 
+    const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const isDifferentMonthSelection = selectedMonth !== currentMonthKey;
+
     const handleUpload = async () => {
         if (!file) return;
+
+        if (isDifferentMonthSelection) {
+            const confirmed = window.confirm(
+                `Anda memilih bulan laporan ${new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}.\n\nData akan diproses untuk bulan tersebut, walaupun file diupload di bulan lain. Lanjutkan?`
+            );
+
+            if (!confirmed) {
+                return;
+            }
+        }
+
         setIsUploading(true);
         setMessage(null);
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('report_month', selectedMonth);
         try {
             const res = await fetch('/api/upload', { method: 'POST', body: formData });
             const data = await res.json();
@@ -177,6 +210,87 @@ export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalP
                             {isDone && <CheckCircle2 size={20} color="#0ea573" />}
                         </div>
                     )}
+
+                    <div style={{ marginTop: 18 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2b4a' }}>
+                                Bulan laporan
+                            </div>
+                            <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                borderRadius: 999,
+                                background: isDifferentMonthSelection ? '#fff7ed' : '#e9f0fc',
+                                color: isDifferentMonthSelection ? '#b45309' : '#1e5fd4',
+                                border: isDifferentMonthSelection ? '1px solid #fed7aa' : '1px solid #bfdbfe',
+                                padding: '3px 8px',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: '0.02em',
+                                textTransform: 'uppercase',
+                            }}>
+                                {isDifferentMonthSelection ? 'Laporan khusus' : 'Bulan aktif'}
+                            </span>
+                        </div>
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
+                            style={{
+                                width: '100%',
+                                border: '1px solid #cfe3ff',
+                                borderRadius: 8,
+                                background: '#f8fbff',
+                                color: '#1a2b4a',
+                                padding: '10px 12px',
+                                fontSize: 13,
+                                fontWeight: 600,
+                            }}
+                        >
+                            {monthOptions.map((month) => (
+                                <option key={month.value} value={month.value}>
+                                    {month.label}
+                                </option>
+                            ))}
+                        </select>
+                        <div style={{
+                            marginTop: 6,
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#475569',
+                            fontSize: 11,
+                            lineHeight: 1.5,
+                        }}>
+                            <strong style={{ color: '#1a2b4a' }}>Tanggal upload aktual:</strong> {' '}
+                            {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                        <div style={{
+                            marginTop: 10,
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            background: '#fef3c7',
+                            border: '1px solid #fcd34d',
+                            color: '#92400e',
+                            fontSize: 11,
+                            lineHeight: 1.5,
+                        }}>
+                            <strong>Catatan:</strong> Data untuk bulan laporan yang dipilih akan menggantikan data yang sudah ada untuk bulan yang sama di database.
+                        </div>
+                        <div style={{
+                            marginTop: 6,
+                            fontSize: 11,
+                            color: isDifferentMonthSelection ? '#b45309' : '#5a7184',
+                            background: isDifferentMonthSelection ? '#fff7ed' : 'transparent',
+                            border: isDifferentMonthSelection ? '1px solid #fed7aa' : 'none',
+                            borderRadius: 6,
+                            padding: isDifferentMonthSelection ? '6px 8px' : '0',
+                        }}>
+                            {isDifferentMonthSelection
+                                ? `Peringatan: bulan laporan berbeda dari bulan saat ini (${new Date(`${currentMonthKey}-01T00:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}).`
+                                : 'Data akan diproses sebagai bulan laporan yang dipilih, walaupun file diupload di bulan lain.'}
+                        </div>
+                    </div>
 
                     {/* Message */}
                     {message && (
