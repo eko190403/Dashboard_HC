@@ -178,6 +178,57 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         link.click();
     };
 
+    const handleExportGenderCSV = () => {
+        const total = genderData.reduce((sum, item) => sum + item.value, 0);
+        const villageName = filterGenderVillage === 'All' ? 'Semua Desa' : filterGenderVillage;
+        const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+        const rows = [
+            ['Desa', 'Gender', 'Jumlah TK', 'Persentase (%)'],
+            ...genderData.map(item => [
+                villageName,
+                item.name,
+                String(item.value),
+                total ? ((item.value / total) * 100).toFixed(2) : '0.00',
+            ]),
+            [villageName, 'Total', String(total), total ? '100.00' : '0.00'],
+        ];
+        const csvContent = rows.map(row => row.map(escapeCsv).join(',')).join('\r\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeVillageName = villageName.replace(/[^a-zA-Z0-9_-]+/g, '_');
+        link.href = url;
+        link.download = `Distribusi_Gender_${safeVillageName}_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    const handleExportAgeCSV = () => {
+        const villageName = filterGenderVillage === 'All' ? 'Semua Desa' : filterGenderVillage;
+        const total = ageData.reduce((sum, item) => sum + Number(item.value || 0), ageUnknown);
+        const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+        const rows = [
+            ['Desa', 'Kelompok Umur', 'Jumlah TK', 'Persentase (%)'],
+            ...ageData.map(item => [
+                villageName,
+                `${item.name} Tahun`,
+                String(item.value),
+                total ? ((item.value / total) * 100).toFixed(2) : '0.00',
+            ]),
+            [villageName, 'Tidak Diketahui', String(ageUnknown), total ? ((ageUnknown / total) * 100).toFixed(2) : '0.00'],
+            [villageName, 'Total', String(total), total ? '100.00' : '0.00'],
+        ];
+        const csvContent = rows.map(row => row.map(escapeCsv).join(',')).join('\r\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeVillageName = villageName.replace(/[^a-zA-Z0-9_-]+/g, '_');
+        link.href = url;
+        link.download = `Distribusi_Umur_${safeVillageName}_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
     const handleExportReport = async () => {
         try {
             const params = new URLSearchParams();
@@ -627,16 +678,27 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Distribusi Gender</h3>
                             <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Laki-laki vs Perempuan</p>
                         </div>
-                        <select
-                            value={filterGenderVillage}
-                            onChange={(e) => setFilterGenderVillage(e.target.value)}
-                            className="form-select"
-                            style={{ width: 120, padding: '4px 8px', fontSize: 11 }}
-                        >
-                            {uniqueVillages.map(v => (
-                                <option key={v} value={v}>{v === 'All' ? 'Semua Desa' : v}</option>
-                            ))}
-                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <select
+                                value={filterGenderVillage}
+                                onChange={(e) => setFilterGenderVillage(e.target.value)}
+                                className="form-select"
+                                style={{ width: 120, padding: '4px 8px', fontSize: 11 }}
+                            >
+                                {uniqueVillages.map(v => (
+                                    <option key={v} value={v}>{v === 'All' ? 'Semua Desa' : v}</option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={handleExportGenderCSV}
+                                title="Unduh data distribusi gender untuk desa terpilih"
+                                style={{ padding: '5px 8px', fontSize: 11 }}
+                            >
+                                <Download size={13} /> CSV
+                            </button>
+                        </div>
                     </div>
                     <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -691,9 +753,23 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
 
                 {/* Age Pie Chart */}
                 <div className="card" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column' }}>
-                    <div className="gender-header" style={{ marginBottom: 16 }}>
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Demografi Usia</h3>
-                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Distribusi usia produktif</p>
+                    <div className="gender-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Demografi Usia</h3>
+                            <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                                {filterGenderVillage === 'All' ? 'Semua desa' : filterGenderVillage}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={handleExportAgeCSV}
+                            disabled={ageLoading || ageData.length === 0}
+                            title="Unduh data distribusi umur untuk desa terpilih"
+                            style={{ padding: '5px 8px', fontSize: 11 }}
+                        >
+                            <Download size={13} /> CSV
+                        </button>
                     </div>
                     <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>
                         {ageLoading ? (
