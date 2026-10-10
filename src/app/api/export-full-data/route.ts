@@ -90,29 +90,31 @@ function buildSummaryRows(employees: EmployeeRecord[], totalHc: number) {
     return { villageRows, districtRows, chartRows: namedVillages.slice(0, 10) };
 }
 
-function buildDistributionCharts(
+function filterEmployeesByVillage(
     employees: EmployeeRecord[],
     selectedVillage: string | null,
-): DistributionChart[] {
-    let selectedEmployees = employees;
-    if (selectedVillage && selectedVillage !== 'All') {
-        if (selectedVillage === 'Desa Lainnya (< 20 TK)') {
-            const villageCounts = new Map<string, number>();
-            for (const employee of employees) {
-                const name = employee.nama_desa?.trim() || 'Tidak Diketahui';
-                villageCounts.set(name, (villageCounts.get(name) || 0) + 1);
-            }
-            const groupedVillageNames = new Set(
-                [...villageCounts.entries()]
-                    .filter(([name, count]) => count < 20 || name.startsWith('Format') || name.startsWith('Lokasi'))
-                    .map(([name]) => name),
-            );
-            selectedEmployees = employees.filter(employee => groupedVillageNames.has(employee.nama_desa?.trim() || 'Tidak Diketahui'));
-        } else {
-            selectedEmployees = employees.filter(employee => (employee.nama_desa?.trim() || 'Tidak Diketahui') === selectedVillage);
+): EmployeeRecord[] {
+    const villageFilter = selectedVillage?.trim();
+    if (!villageFilter || villageFilter === 'All') return employees;
+
+    if (villageFilter === 'Desa Lainnya (< 20 TK)') {
+        const villageCounts = new Map<string, number>();
+        for (const employee of employees) {
+            const name = employee.nama_desa?.trim() || 'Tidak Diketahui';
+            villageCounts.set(name, (villageCounts.get(name) || 0) + 1);
         }
+        const groupedVillageNames = new Set(
+            [...villageCounts.entries()]
+                .filter(([name, count]) => count < 20 || name.startsWith('Format') || name.startsWith('Lokasi'))
+                .map(([name]) => name),
+        );
+        return employees.filter(employee => groupedVillageNames.has(employee.nama_desa?.trim() || 'Tidak Diketahui'));
     }
 
+    return employees.filter(employee => (employee.nama_desa?.trim() || 'Tidak Diketahui') === villageFilter);
+}
+
+function buildDistributionCharts(selectedEmployees: EmployeeRecord[], selectedVillage: string | null): DistributionChart[] {
     const genderCounts = new Map<string, number>([
         ['Laki-laki', 0],
         ['Perempuan', 0],
@@ -261,11 +263,12 @@ export async function GET(request: NextRequest) {
         }
 
         const rows = buildSummaryRows(employees, totalHc);
+        const selectedEmployees = filterEmployeesByVillage(employees, selectedVillage);
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'HR Dashboard PG 2';
         workbook.created = new Date();
-        addEmployeeWorksheet(workbook, employees);
-        const distributionCharts = buildDistributionCharts(employees, selectedVillage);
+        addEmployeeWorksheet(workbook, selectedEmployees);
+        const distributionCharts = buildDistributionCharts(selectedEmployees, selectedVillage);
         await addSummaryWorksheet(
             workbook,
             rows.villageRows,
