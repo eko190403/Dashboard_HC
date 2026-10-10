@@ -178,57 +178,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         link.click();
     };
 
-    const handleExportGenderCSV = () => {
-        const total = genderData.reduce((sum, item) => sum + item.value, 0);
-        const villageName = filterGenderVillage === 'All' ? 'Semua Desa' : filterGenderVillage;
-        const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-        const rows = [
-            ['Desa', 'Gender', 'Jumlah TK', 'Persentase (%)'],
-            ...genderData.map(item => [
-                villageName,
-                item.name,
-                String(item.value),
-                total ? ((item.value / total) * 100).toFixed(2) : '0.00',
-            ]),
-            [villageName, 'Total', String(total), total ? '100.00' : '0.00'],
-        ];
-        const csvContent = rows.map(row => row.map(escapeCsv).join(',')).join('\r\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const safeVillageName = villageName.replace(/[^a-zA-Z0-9_-]+/g, '_');
-        link.href = url;
-        link.download = `Distribusi_Gender_${safeVillageName}_${new Date().toISOString().slice(0, 10)}.csv`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
-
-    const handleExportAgeCSV = () => {
-        const villageName = filterGenderVillage === 'All' ? 'Semua Desa' : filterGenderVillage;
-        const total = ageData.reduce((sum, item) => sum + Number(item.value || 0), ageUnknown);
-        const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-        const rows = [
-            ['Desa', 'Kelompok Umur', 'Jumlah TK', 'Persentase (%)'],
-            ...ageData.map(item => [
-                villageName,
-                `${item.name} Tahun`,
-                String(item.value),
-                total ? ((item.value / total) * 100).toFixed(2) : '0.00',
-            ]),
-            [villageName, 'Tidak Diketahui', String(ageUnknown), total ? ((ageUnknown / total) * 100).toFixed(2) : '0.00'],
-            [villageName, 'Total', String(total), total ? '100.00' : '0.00'],
-        ];
-        const csvContent = rows.map(row => row.map(escapeCsv).join(',')).join('\r\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const safeVillageName = villageName.replace(/[^a-zA-Z0-9_-]+/g, '_');
-        link.href = url;
-        link.download = `Distribusi_Umur_${safeVillageName}_${new Date().toISOString().slice(0, 10)}.csv`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
-
     const handleExportReport = async () => {
         try {
             const params = new URLSearchParams();
@@ -693,11 +642,11 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             <button
                                 type="button"
                                 className="btn-secondary"
-                                onClick={handleExportGenderCSV}
-                                title="Unduh data distribusi gender untuk desa terpilih"
+                                onClick={handleDownloadFullData}
+                                title="Unduh data TK lengkap dan grafik gender serta umur untuk desa terpilih"
                                 style={{ padding: '5px 8px', fontSize: 11 }}
                             >
-                                <Download size={13} /> CSV
+                                <Download size={13} /> Excel
                             </button>
                         </div>
                     </div>
@@ -764,12 +713,12 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         <button
                             type="button"
                             className="btn-secondary"
-                            onClick={handleExportAgeCSV}
+                            onClick={handleDownloadFullData}
                             disabled={ageLoading || ageData.length === 0}
-                            title="Unduh data distribusi umur untuk desa terpilih"
+                            title="Unduh data TK lengkap dan grafik gender serta umur untuk desa terpilih"
                             style={{ padding: '5px 8px', fontSize: 11 }}
                         >
-                            <Download size={13} /> CSV
+                            <Download size={13} /> Excel
                         </button>
                     </div>
                     <div style={{ minHeight: 220, width: '100%', marginBottom: 12 }}>

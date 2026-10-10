@@ -33,7 +33,7 @@ The migrations also revoke direct client write privileges on upload and mandor t
 
 ## Downloading saved upload data with its summary
 
-The dashboard's **Data Lengkap** action builds a workbook from the saved `employee_domisili` records for the selected upload. It includes a `Data Karyawan` sheet with every employee field retained in the database and a `Ringkasan` sheet with village/district totals, the Top 10 village chart, and gender and age distribution charts. The gender and age charts use the village selected in the dashboard; the employee sheet still contains every employee in the selected upload. It uses the signed-in user's Supabase session to read the data and does not require the service-role key for downloading. Source columns that are not stored in `employee_domisili` cannot be reconstructed in this export.
+The dashboard's **Data Lengkap** action and the **Excel** buttons on the gender and age charts build a workbook from the saved `employee_domisili` records for the selected upload. It includes a `Data Karyawan` sheet with every employee field retained in the database and a `Ringkasan` sheet with village/district totals, the Top 10 village chart, and gender and age distribution charts. The gender and age charts use the village selected in the dashboard; the employee sheet still contains every employee in the selected upload. It uses the signed-in user's Supabase session to read the data and does not require the service-role key for downloading. Source columns that are not stored in `employee_domisili` cannot be reconstructed in this export.
 
 ## Authentication setup
 
