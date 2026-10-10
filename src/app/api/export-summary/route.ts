@@ -12,14 +12,8 @@ type SummaryRow = {
     percentage: number;
 };
 
-type VillageSummaryRecord = {
+type EmployeeSummaryRecord = {
     nama_desa: string | null;
-    jumlah_tk: number | null;
-    persentase: number | null;
-    is_grouped: boolean | null;
-};
-
-type EmployeeDistrict = {
     kecamatan: string | null;
 };
 
@@ -42,7 +36,7 @@ function createVillageChart(villages: SummaryRow[]): string {
     const bottom = 105;
     const chartWidth = width - left - right;
     const chartHeight = height - top - bottom;
-    const maxPercentage = Math.max(...villages.map(village => village.percentage), 0.01);
+    const maxPercentage = Math.max(...villages.map(village => village.percentage / 100), 0.01);
     const maxValue = Math.max(0.02, Math.ceil(maxPercentage / 0.02) * 0.02);
     const step = chartWidth / Math.max(villages.length, 1);
     const barWidth = Math.min(16, step * 0.62);
@@ -58,7 +52,7 @@ function createVillageChart(villages: SummaryRow[]): string {
 
     const bars = villages.map((village, index) => {
         const x = left + step * index + (step - barWidth) / 2;
-        const barHeight = village.percentage / 100 / maxValue * chartHeight;
+        const barHeight = (village.percentage / 100) / maxValue * chartHeight;
         const y = top + chartHeight - barHeight;
         const center = x + barWidth / 2;
         const label = escapeXml(village.name);
@@ -89,7 +83,7 @@ function addSummaryTable(
     totalHc: number,
     includeTotal: boolean,
 ) {
-    const headerRow = worksheet.getRow(4);
+    const headerRow = worksheet.getRow(3);
     [firstColumnHeader, 'Jumlah TK', 'Persentase (%)'].forEach((header, index) => {
         const cell = headerRow.getCell(startColumn + index);
         cell.value = header;
@@ -105,7 +99,7 @@ function addSummaryTable(
     });
 
     rows.forEach((item, index) => {
-        const row = worksheet.getRow(index + 5);
+        const row = worksheet.getRow(index + 4);
         row.height = 17;
         row.getCell(startColumn).value = item.name;
         row.getCell(startColumn + 1).value = item.count;
@@ -127,7 +121,7 @@ function addSummaryTable(
     });
 
     if (includeTotal) {
-        const totalRow = worksheet.getRow(rows.length + 5);
+        const totalRow = worksheet.getRow(rows.length + 4);
         totalRow.height = 17;
         totalRow.getCell(startColumn).value = 'Total';
         totalRow.getCell(startColumn + 1).value = totalHc;
@@ -178,69 +172,76 @@ export async function GET(request: NextRequest) {
         }
 
         const pageSize = 1000;
-        const villages: VillageSummaryRecord[] = [];
-        for (let from = 0; ; from += pageSize) {
-            const { data, error } = await supabase
-                .from('summary_domisili')
-                .select('nama_desa, jumlah_tk, persentase, is_grouped')
-                .eq('upload_id', uploadId)
-                .order('jumlah_tk', { ascending: false })
-                .range(from, from + pageSize - 1);
-            if (error) throw error;
-            if (data?.length) villages.push(...data);
-            if (!data || data.length < pageSize) break;
-        }
-
-        if (villages.length === 0) {
-            return NextResponse.json({ error: 'Ringkasan desa tidak ditemukan untuk upload ini.' }, { status: 404 });
-        }
-
-        const villageRows = villages
-            .map(village => {
-                const count = Number(village.jumlah_tk) || 0;
-                return {
-                    name: village.nama_desa || 'Tidak Diketahui',
-                    count,
-                    percentage: village.persentase == null ? count / totalHc * 100 : Number(village.persentase),
-                };
-            })
-            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
-        const chartRows = villages
-            .filter(village => !village.is_grouped)
-            .map(village => {
-                const count = Number(village.jumlah_tk) || 0;
-                return {
-                    name: village.nama_desa || 'Tidak Diketahui',
-                    count,
-                    percentage: village.persentase == null ? count / totalHc * 100 : Number(village.persentase),
-                };
-            })
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 10);
-
+        const villageCounts = new Map<string, number>();
         const districtCounts = new Map<string, number>();
         for (let from = 0; ; from += pageSize) {
             const { data, error } = await supabase
                 .from('employee_domisili')
-                .select('kecamatan')
+                .select('nama_desa, kecamatan')
                 .eq('upload_id', uploadId)
                 .range(from, from + pageSize - 1);
             if (error) throw error;
-            for (const employee of (data || []) as EmployeeDistrict[]) {
+            for (const employee of (data || []) as EmployeeSummaryRecord[]) {
+                const village = employee.nama_desa?.trim() || 'Tidak Diketahui';
                 const district = employee.kecamatan?.trim() || 'Tidak Diketahui';
+                villageCounts.set(village, (villageCounts.get(village) || 0) + 1);
                 districtCounts.set(district, (districtCounts.get(district) || 0) + 1);
             }
             if (!data || data.length < pageSize) break;
         }
 
+        if (villageCounts.size === 0) {
+            return NextResponse.json({ error: 'Data karyawan tidak ditemukan untuk upload ini.' }, { status: 404 });
+        }
+
+        const namedVillages: SummaryRow[] = [];
+        let otherVillageCount = 0;
+        let limitedAddressCount = 0;
+        for (const [name, count] of villageCounts) {
+            if (
+                name === 'Lokasi Perusahaan / Mess'
+                || name === 'Tidak Diketahui'
+                || name.startsWith('Format')
+            ) {
+                limitedAddressCount += count;
+            } else if (count < 20) {
+                otherVillageCount += count;
+            } else {
+                namedVillages.push({
+                    name,
+                    count,
+                    percentage: count / totalHc * 100,
+                });
+            }
+        }
+
+        namedVillages.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
+        const villageRows = [...namedVillages];
+        if (otherVillageCount > 0) {
+            villageRows.push({
+                name: 'Desa Lainnya (< 20 TK)',
+                count: otherVillageCount,
+                percentage: otherVillageCount / totalHc * 100,
+            });
+        }
+        if (limitedAddressCount > 0) {
+            villageRows.push({
+                name: 'Format Alamat Terbatas / Lainnya',
+                count: limitedAddressCount,
+                percentage: limitedAddressCount / totalHc * 100,
+            });
+        }
+        const chartRows = namedVillages
+            .slice(0, 10);
+
         const sortedDistricts = [...districtCounts.entries()]
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
-        const districtRows = sortedDistricts.slice(0, 9).map(item => ({
+        const districtRows = sortedDistricts.slice(0, 10).map(item => ({
             ...item,
             percentage: item.count / totalHc * 100,
         }));
-        const otherDistricts = sortedDistricts.slice(9).reduce((count, item) => count + item.count, 0);
+        const otherDistricts = sortedDistricts.slice(10).reduce((count, item) => count + item.count, 0);
         if (otherDistricts > 0) {
             districtRows.push({
                 name: 'Kecamatan Lainnya',
@@ -253,7 +254,7 @@ export async function GET(request: NextRequest) {
         workbook.creator = 'HR Dashboard PG 2';
         workbook.created = new Date();
         const worksheet = workbook.addWorksheet('Ringkasan');
-        worksheet.views = [{ state: 'frozen', ySplit: 4, showGridLines: true }];
+        worksheet.views = [{ state: 'frozen', ySplit: 3, showGridLines: true }];
         worksheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
         worksheet.columns = [
             { width: 76 }, { width: 12.5 }, { width: 17 }, { width: 2 },
@@ -266,8 +267,7 @@ export async function GET(request: NextRequest) {
         worksheet.getCell('A2').font = { color: { argb: 'FF202020' } };
         worksheet.getRow(1).height = 21;
         worksheet.getRow(2).height = 19;
-        worksheet.getRow(3).height = 16;
-        worksheet.getRow(4).height = 20;
+        worksheet.getRow(3).height = 20;
 
         addSummaryTable(worksheet, 1, 'Nama Desa / Kelurahan', villageRows, totalHc, true);
         addSummaryTable(worksheet, 5, 'Kecamatan / District', districtRows, totalHc, false);
@@ -277,7 +277,7 @@ export async function GET(request: NextRequest) {
         worksheet.getColumn(5).eachCell({ includeEmpty: false }, cell => { cell.alignment = { horizontal: 'left' }; });
         worksheet.getColumn(6).eachCell({ includeEmpty: false }, cell => { cell.alignment = { horizontal: 'right' }; });
         worksheet.getColumn(7).eachCell({ includeEmpty: false }, cell => { cell.alignment = { horizontal: 'right' }; });
-        worksheet.getRow(4).eachCell(cell => { cell.alignment = { horizontal: 'center', vertical: 'middle' }; });
+        worksheet.getRow(3).eachCell(cell => { cell.alignment = { horizontal: 'center', vertical: 'middle' }; });
 
         const chart = await sharp(Buffer.from(createVillageChart(chartRows))).png().toBuffer();
         const imageId = workbook.addImage({ base64: chart.toString('base64'), extension: 'png' });
