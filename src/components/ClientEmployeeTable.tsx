@@ -3,7 +3,21 @@
 import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 
-export default function ClientEmployeeTable({ employees, latestUpload }: { employees: any[], latestUpload: any }) {
+interface EmployeeRow {
+    id: string | number;
+    employee_name: string | null;
+    birth_date: string | null;
+    age: number | null;
+    gender: string | null;
+    employment_status: string | null;
+    street_address: string | null;
+}
+
+interface LatestUpload {
+    id: string;
+}
+
+export default function ClientEmployeeTable({ employees, latestUpload }: { employees: EmployeeRow[]; latestUpload: LatestUpload | null }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const rowsPerPage = 50;
@@ -71,12 +85,12 @@ export default function ClientEmployeeTable({ employees, latestUpload }: { emplo
                                     <td>{emp.birth_date ? new Date(emp.birth_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
                                     <td>{emp.age ? `${emp.age} thn` : '—'}</td>
                                     <td>
-                                        {emp.gender.toLowerCase() === 'male' || emp.gender.toLowerCase() === 'laki-laki' ? (
+                                        {(emp.gender || '').toLowerCase() === 'male' || (emp.gender || '').toLowerCase() === 'laki-laki' ? (
                                             <span style={{ color: '#1e5fd4', fontWeight: 500 }}>Laki-laki ♂</span>
-                                        ) : emp.gender.toLowerCase() === 'female' || emp.gender.toLowerCase() === 'perempuan' ? (
+                                        ) : (emp.gender || '').toLowerCase() === 'female' || (emp.gender || '').toLowerCase() === 'perempuan' ? (
                                             <span style={{ color: '#e11d48', fontWeight: 500 }}>Perempuan ♀</span>
                                         ) : (
-                                            <span style={{ color: '#5a7184' }}>{emp.gender}</span>
+                                            <span style={{ color: '#5a7184' }}>{emp.gender || '—'}</span>
                                         )}
                                     </td>
                                     <td>

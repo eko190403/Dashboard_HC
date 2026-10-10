@@ -5,6 +5,7 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
+import type { TooltipContentProps } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
 
 interface TrendPoint {
@@ -13,8 +14,9 @@ interface TrendPoint {
     total_hc: number;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: TooltipContentProps) => {
     if (active && payload && payload.length) {
+        const totalHC = payload[0]?.value;
         return (
             <div style={{
                 background: '#fff', border: '1px solid #dde3ed',
@@ -26,7 +28,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1e5fd4' }} />
                     <span style={{ color: '#5a7184' }}>Total HC:</span>
-                    <span style={{ fontWeight: 700, color: '#1e5fd4' }}>{payload[0].value.toLocaleString('id-ID')}</span>
+                    <span style={{ fontWeight: 700, color: '#1e5fd4' }}>{typeof totalHC === 'number' ? totalHC.toLocaleString('id-ID') : totalHC}</span>
                 </div>
             </div>
         );
@@ -171,7 +173,7 @@ export default function HCTrendChart({ variant = 'full' }: { variant?: 'full' | 
                                 tickFormatter={(val: number) => val.toLocaleString('id-ID')}
                                 width={55}
                             />
-                            <Tooltip content={<CustomTooltip />} />
+                            <Tooltip content={CustomTooltip} />
                             <Area
                                 type="monotone"
                                 dataKey="total_hc"

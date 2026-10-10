@@ -7,6 +7,16 @@ const PAGE_SIZE = 50;
 const QUERY_CHUNK_SIZE = 50;
 const READ_BATCH_SIZE = 1000;
 
+interface GroupedVillageEmployee {
+    kit_tk: string | null;
+    employee_name: string | null;
+    nama_desa: string | null;
+    kecamatan: string | null;
+    gender: string | null;
+    bagian: string | null;
+    nama_mandor: string | null;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -45,7 +55,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ data: [], page, totalPages: 1, totalCount: 0, pageSize: PAGE_SIZE });
         }
 
-        const employees: any[] = [];
+        const employees: GroupedVillageEmployee[] = [];
         for (let index = 0; index < groupedVillageNames.length; index += QUERY_CHUNK_SIZE) {
             const { data, error } = await supabase
                 .from('employee_domisili')

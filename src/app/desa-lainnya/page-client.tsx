@@ -30,10 +30,7 @@ export default function GroupedVillagePageClient({
     const [error, setError] = useState('');
 
     useEffect(() => {
-        if (!uploadId) {
-            setLoading(false);
-            return;
-        }
+        if (!uploadId) return;
 
         const controller = new AbortController();
         const timer = window.setTimeout(async () => {

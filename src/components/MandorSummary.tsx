@@ -3,8 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Search, Users, Trophy } from 'lucide-react';
 
+interface MandorSummaryItem {
+    nama_mandor: string;
+    kit_mandor: string;
+    kasi: string;
+    total_tk: number;
+}
+
 export default function MandorSummary() {
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<MandorSummaryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');

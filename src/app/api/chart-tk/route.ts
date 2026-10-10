@@ -3,6 +3,12 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+interface ChartTkRow {
+    komoditi: string | null;
+    bagian: string | null;
+    nama_desa: string | null;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -31,7 +37,7 @@ export async function GET(request: NextRequest) {
             query = query.eq('upload_id', uploadId);
         }
 
-        const allData: any[] = [];
+        const allData: ChartTkRow[] = [];
         let page = 0;
         const pageSize = 1000;
         
@@ -120,8 +126,11 @@ export async function GET(request: NextRequest) {
             totalRows: mappedData.length,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching chart data:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message) || 'Internal Server Error'
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

@@ -3,6 +3,10 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+interface BagianRow {
+    bagian: string | null;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -35,13 +39,17 @@ export async function GET(request: NextRequest) {
         if (error) throw error;
 
         // Deduplicate dan sort
+        const rows = (data || []) as BagianRow[];
         const bagianList = Array.from(
-            new Set((data || []).map((r: any) => r.bagian).filter(Boolean))
+            new Set(rows.map(r => r.bagian).filter((bagian): bagian is string => Boolean(bagian)))
         ).sort();
 
         return NextResponse.json({ bagianList });
 
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

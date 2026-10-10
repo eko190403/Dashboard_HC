@@ -42,7 +42,11 @@ export async function GET(request: NextRequest) {
             .select('kit_tk, employee_name, kit_mandor, nama_mandor, kasi, indeks_tk, bagian, gender');
 
         // Apply common filters
-        const applyFilters = (q: any) => {
+        const applyFilters = <T extends {
+            eq: (column: string, value: string) => T;
+            in: (column: string, values: string[]) => T;
+            ilike: (column: string, pattern: string) => T;
+        }>(q: T): T => {
             if (uploadId) q = q.eq('upload_id', uploadId);
             if (komoditi && komoditi !== 'Semua') {
                 q = q.eq('komoditi', komoditi);
@@ -78,8 +82,11 @@ export async function GET(request: NextRequest) {
             pageSize: PAGE_SIZE,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching TK details:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message) || 'Internal Server Error'
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

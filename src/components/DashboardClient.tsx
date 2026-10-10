@@ -3,10 +3,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+    Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
 } from 'recharts';
-import { Search, Download, Users, MapPin, Map, Clock, Upload, ArrowUp, FileSpreadsheet, RotateCcw } from 'lucide-react';
+import { Search, Download, Users, MapPin, Map, Upload, FileSpreadsheet, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
@@ -23,8 +23,54 @@ interface DashboardData {
     totalVillages: number;
     dominantDistrict: { name: string; percentage: number };
     lastUpdated: string;
-    villageData: any[];
-    districtData: any[];
+    villageData: VillageSummary[];
+    districtData: DistrictSummary[];
+}
+
+interface VillageSummary {
+    id?: string | number;
+    nama_desa: string;
+    kecamatan: string;
+    jumlah_tk: number;
+    persentase: number;
+    is_grouped?: boolean;
+    jumlah_laki?: number;
+    jumlah_perempuan?: number;
+}
+
+interface DistrictSummary {
+    name: string;
+    value: number;
+}
+
+interface UploadOption {
+    id: string | number;
+    uploaded_at: string;
+}
+
+interface ChartTooltipPayload {
+    value: number;
+    name?: string;
+    payload?: {
+        percent?: number;
+    };
+}
+
+interface ChartTooltipProps {
+    active?: boolean;
+    payload?: ChartTooltipPayload[];
+    label?: string;
+}
+
+interface AgeSummary {
+    name: string;
+    value: number;
+    fill: string;
+}
+
+interface AgeDemographicsResponse {
+    data?: AgeSummary[];
+    unknown?: number;
 }
 
 const DISTRICT_COLORS = [
@@ -33,8 +79,12 @@ const DISTRICT_COLORS = [
     '#0d9488', '#9333ea', '#64748b',
 ];
 
-const CustomTooltipBar = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+const CustomTooltipPie = ({ active, payload, totalHc }: ChartTooltipProps & { totalHc: number }) => {
+    const item = payload?.[0];
+    if (active && item) {
+        const val = item.value;
+        const percent = item.payload?.percent;
+        const pctText = totalHc ? `${((val / totalHc) * 100).toFixed(2)}%` : (percent !== undefined ? `${(percent * 100).toFixed(2)}%` : '');
         return (
             <div style={{
                 background: '#fff', border: '1px solid #dde3ed',
@@ -42,26 +92,7 @@ const CustomTooltipBar = ({ active, payload, label }: any) => {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                 fontSize: 12,
             }}>
-                <div style={{ fontWeight: 600, color: '#1a2b4a', marginBottom: 4 }}>{label}</div>
-                <div style={{ color: '#1e5fd4' }}>{payload[0].value.toLocaleString('id-ID')} TK</div>
-            </div>
-        );
-    }
-    return null;
-};
-
-const CustomTooltipPie = ({ active, payload, totalHc }: any) => {
-    if (active && payload && payload.length) {
-        const val = payload[0].value;
-        const pctText = totalHc ? `${((val / totalHc) * 100).toFixed(2)}%` : (payload[0].payload.percent !== undefined ? `${(payload[0].payload.percent * 100).toFixed(2)}%` : '');
-        return (
-            <div style={{
-                background: '#fff', border: '1px solid #dde3ed',
-                borderRadius: 8, padding: '10px 14px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                fontSize: 12,
-            }}>
-                <div style={{ fontWeight: 600, color: '#1a2b4a', marginBottom: 4 }}>{payload[0].name}</div>
+                <div style={{ fontWeight: 600, color: '#1a2b4a', marginBottom: 4 }}>{item.name}</div>
                 <div style={{ color: '#5a7184' }}>{val.toLocaleString('id-ID')} TK</div>
                 {pctText && <div style={{ color: '#94a3b8', fontSize: 11 }}>{pctText}</div>}
             </div>
@@ -70,7 +101,7 @@ const CustomTooltipPie = ({ active, payload, totalHc }: any) => {
     return null;
 };
 
-export default function DashboardClient({ initialData, allUploads, currentUploadId }: { initialData: DashboardData | null, allUploads: any[], currentUploadId: string | null }) {
+export default function DashboardClient({ initialData, allUploads, currentUploadId }: { initialData: DashboardData | null, allUploads: UploadOption[], currentUploadId: string | null }) {
     const router = useRouter();
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
@@ -79,7 +110,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
     const [showOtherVillages, setShowOtherVillages] = useState(false);
-    const [ageData, setAgeData] = useState<any[]>([]);
+    const [ageData, setAgeData] = useState<AgeSummary[]>([]);
     const [ageUnknown, setAgeUnknown] = useState(0);
     const [ageLoading, setAgeLoading] = useState(true);
 
@@ -95,7 +126,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                 const params = queryParams.toString() ? `?${queryParams.toString()}` : '';
                 const res = await fetch(`/api/age-demographics${params}`, { signal: controller.signal });
                 if (res.ok) {
-                    const json = await res.json();
+                    const json = await res.json() as AgeDemographicsResponse;
                     setAgeData(json.data || []);
                     setAgeUnknown(json.unknown || 0);
                 }
@@ -108,6 +139,51 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         fetchAgeData();
         return () => controller.abort();
     }, [filterGenderVillage, currentUploadId]);
+
+    const summaryInsight = useMemo(() => {
+        if (!initialData) return '';
+
+        const absDiff = Math.abs(initialData.diffHc);
+
+        if (!initialData.previousUploadDate) {
+            return 'Belum ada upload sebelumnya untuk perbandingan tren.';
+        }
+
+        if (initialData.diffHc > 0) {
+            return `Total HC naik ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
+        }
+
+        if (initialData.diffHc < 0) {
+            return `Total HC turun ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
+        }
+
+        return 'Total HC relatif stabil dibanding upload sebelumnya.';
+    }, [initialData]);
+
+    const filteredVillages = useMemo(() => {
+        return (initialData?.villageData ?? [])
+            .filter(v => {
+                const matchSearch = v.nama_desa.toLowerCase().includes(searchQuery.toLowerCase());
+                const matchDistrict = filterDistrict === 'All' || v.kecamatan === filterDistrict;
+                return matchSearch && matchDistrict;
+            })
+            .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
+    }, [initialData, searchQuery, filterDistrict]);
+
+    const genderData = useMemo(() => {
+        const villageData = initialData?.villageData ?? [];
+        const villages = filterGenderVillage === 'All'
+            ? villageData
+            : villageData.filter(v => v.nama_desa === filterGenderVillage);
+        const getCount = (value: unknown) => Number(value) || 0;
+        const laki = villages.reduce((total, village) => total + getCount(village.jumlah_laki), 0);
+        const perempuan = villages.reduce((total, village) => total + getCount(village.jumlah_perempuan), 0);
+
+        return [
+            { name: 'Laki-laki', value: laki, fill: '#1e5fd4' },
+            { name: 'Perempuan', value: perempuan, fill: '#e11d48' },
+        ];
+    }, [initialData?.villageData, filterGenderVillage]);
 
     if (!initialData) {
         return (
@@ -136,34 +212,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             </div>
         );
     }
-
-    const summaryInsight = useMemo(() => {
-        const absDiff = Math.abs(initialData.diffHc);
-
-        if (!initialData.previousUploadDate) {
-            return 'Belum ada upload sebelumnya untuk perbandingan tren.';
-        }
-
-        if (initialData.diffHc > 0) {
-            return `Total HC naik ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
-        }
-
-        if (initialData.diffHc < 0) {
-            return `Total HC turun ${absDiff.toLocaleString('id-ID')} TK (${Math.abs(initialData.diffPercent).toFixed(1)}%) dibanding upload sebelumnya.`;
-        }
-
-        return 'Total HC relatif stabil dibanding upload sebelumnya.';
-    }, [initialData.diffHc, initialData.diffPercent, initialData.previousUploadDate]);
-
-    const filteredVillages = useMemo(() => {
-        return initialData.villageData
-            .filter(v => {
-                const matchSearch = v.nama_desa.toLowerCase().includes(searchQuery.toLowerCase());
-                const matchDistrict = filterDistrict === 'All' || v.kecamatan === filterDistrict;
-                return matchSearch && matchDistrict;
-            })
-            .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
-    }, [initialData.villageData, searchQuery, filterDistrict]);
 
     const handleExportCSV = () => {
         const headers = ['No', 'Nama Desa', 'Kecamatan', 'Jumlah TK', 'Persentase (%)'];
@@ -238,20 +286,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         .slice(10)
         .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
     const otherVillagesTotal = otherDesaData.reduce((sum, village) => sum + Number(village.jumlah_tk || 0), 0);
-
-    const genderData = useMemo(() => {
-        const villages = filterGenderVillage === 'All'
-            ? initialData.villageData
-            : initialData.villageData.filter(v => v.nama_desa === filterGenderVillage);
-        const getCount = (value: unknown) => Number(value) || 0;
-        const laki = villages.reduce((total, village) => total + getCount(village.jumlah_laki), 0);
-        const perempuan = villages.reduce((total, village) => total + getCount(village.jumlah_perempuan), 0);
-
-        return [
-            { name: 'Laki-laki', value: laki, fill: '#1e5fd4' },
-            { name: 'Perempuan', value: perempuan, fill: '#e11d48' },
-        ];
-    }, [initialData.villageData, filterGenderVillage]);
 
     const kpiCards = [
         {
@@ -442,7 +476,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                     dataKey="jumlah_tk"
                                     nameKey="nama_desa"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
                                         const actualPercent = (value / initialData.totalHc);
                                         if (actualPercent < 0.04) return null;
                                         const RADIAN = Math.PI / 180;
@@ -563,7 +597,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                     paddingAngle={2}
                                     dataKey="value"
                                     labelLine={false}
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, value }) => {
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, value }) => {
                                         const actualPercent = (value / initialData.totalHc);
                                         if (actualPercent < 0.04) return null;
                                         const RADIAN = Math.PI / 180;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search, Download, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -12,43 +12,65 @@ const RANGE_LABELS: Record<string, { label: string; color: string; bg: string }>
     '55+':   { label: '> 55 Tahun',    color: '#e11d48', bg: '#ffe4e6' },
 };
 
+interface AgeDetailRow {
+    kit_tk: string | null;
+    employee_name: string | null;
+    age: number | null;
+    gender: string | null;
+    komoditi: string | null;
+    bagian: string | null;
+    nama_desa: string | null;
+    kecamatan: string | null;
+}
+
 export default function AgeDetailClient() {
     const searchParams = useSearchParams();
     const range = searchParams.get('range') || '18-35';
     const meta = RANGE_LABELS[range] || { label: range, color: '#1e5fd4', bg: '#e9f0fc' };
 
-    const [data, setData] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<AgeDetailRow[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [filterKomoditi, setFilterKomoditi] = useState('Semua');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
+    const queryKey = JSON.stringify([range, page, filterKomoditi, debouncedSearch]);
+    const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null);
+    const loading = loadedQueryKey !== queryKey;
 
     useEffect(() => {
         const t = setTimeout(() => { setDebouncedSearch(searchQuery); setPage(1); }, 400);
         return () => clearTimeout(t);
     }, [searchQuery]);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            params.append('range', range);
-            if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
-            params.append('page', String(page));
-            if (debouncedSearch) params.append('search', debouncedSearch);
-            const res = await fetch(`/api/age-detail?${params}`);
-            const json = await res.json();
-            setData(json.data || []);
-            setTotalPages(json.totalPages || 1);
-            setTotalCount(json.totalCount || 0);
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
-    }, [range, page, filterKomoditi, debouncedSearch]);
-
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        let cancelled = false;
+        const fetchData = async () => {
+            try {
+                const params = new URLSearchParams();
+                params.append('range', range);
+                if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
+                params.append('page', String(page));
+                if (debouncedSearch) params.append('search', debouncedSearch);
+                const res = await fetch(`/api/age-detail?${params}`);
+                const json = await res.json();
+                if (!cancelled) {
+                    setData(json.data || []);
+                    setTotalPages(json.totalPages || 1);
+                    setTotalCount(json.totalCount || 0);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (!cancelled) setLoadedQueryKey(queryKey);
+            }
+        };
+        void fetchData();
+        return () => {
+            cancelled = true;
+        };
+    }, [range, page, filterKomoditi, debouncedSearch, queryKey]);
 
     const pageStart = (page - 1) * 100 + 1;
     const pageEnd = Math.min(page * 100, totalCount);
@@ -183,8 +205,8 @@ export default function AgeDetailClient() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '12px 16px' }}>
-                                            <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: (genderMap[row.gender] === 'L') ? '#eff6ff' : '#fff0f3', color: (genderMap[row.gender] === 'L') ? '#1e5fd4' : '#e11d48' }}>
-                                                {genderMap[row.gender] || row.gender || '-'}
+                                            <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: (genderMap[row.gender || ''] === 'L') ? '#eff6ff' : '#fff0f3', color: (genderMap[row.gender || ''] === 'L') ? '#1e5fd4' : '#e11d48' }}>
+                                                {genderMap[row.gender || ''] || row.gender || '-'}
                                             </span>
                                         </td>
                                         <td style={{ padding: '12px 16px', color: '#334155' }}>{row.komoditi || '-'}</td>

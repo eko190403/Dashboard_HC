@@ -4,6 +4,17 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+interface AgeExportRow {
+    kit_tk: string | null;
+    employee_name: string | null;
+    age: number | null;
+    gender: string | null;
+    komoditi: string | null;
+    bagian: string | null;
+    nama_desa: string | null;
+    kecamatan: string | null;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -43,7 +54,7 @@ export async function GET(request: NextRequest) {
         if (search) query = query.ilike('employee_name', `%${search}%`);
 
         // Fetch all rows
-        const allData: any[] = [];
+        const allData: AgeExportRow[] = [];
         let page = 0;
         const pageSize = 1000;
         while (true) {
@@ -89,8 +100,11 @@ export async function GET(request: NextRequest) {
                 'Content-Disposition': `attachment; filename="Detail_Usia_${range || 'Semua'}_${new Date().toISOString().split('T')[0]}.xlsx"`,
             },
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error exporting age data:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

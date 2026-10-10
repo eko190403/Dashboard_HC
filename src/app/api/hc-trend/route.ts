@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getEffectiveMonthKey, getEffectiveMonthLabel } from '@/lib/reporting-month';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
         // Fetch all upload logs sorted by date ascending
         const { data: uploads, error } = await supabase
@@ -40,8 +40,11 @@ export async function GET(request: NextRequest) {
             .sort((a, b) => a.month.localeCompare(b.month));
 
         return NextResponse.json({ data: trendData });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching HC trend:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

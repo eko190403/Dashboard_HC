@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer,
@@ -8,6 +8,84 @@ import {
 } from 'recharts';
 import { Loader2, X, Users, Trophy, Layers, MapPin, ChevronRight, ArrowLeft, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+interface TKRow {
+    bagian: string;
+    total: number;
+    lainnyaDetails?: Record<string, number>;
+    [key: string]: unknown;
+}
+
+interface KomoditiSummary {
+    name: string;
+    value: number;
+}
+
+interface BagianChartRow {
+    bagian: string;
+    total: number;
+    _raw: TKRow;
+}
+
+type SelectedBagian = BagianChartRow;
+
+interface TKChartResponse {
+    data?: TKRow[];
+    topDesa?: string[];
+    komoditiSummary?: KomoditiSummary[];
+}
+
+type ChartTooltipProps = {
+    active?: boolean;
+    payload?: Array<{
+        name?: string;
+        value?: number | string;
+        payload?: {
+            bagian?: string;
+            total?: number;
+        };
+    }>;
+    label?: string | number;
+};
+
+const PIE_FALLBACK = '#94a3b8';
+
+function BagianTooltip({
+    active,
+    payload,
+    label,
+    totalBagian = 0,
+    komoditiColor = PIE_FALLBACK,
+}: ChartTooltipProps & { totalBagian?: number; komoditiColor?: string }) {
+    const item = payload?.[0];
+    if (!active || !item) return null;
+    const name = item.name || item.payload?.bagian || label;
+    const value = Number(item.value || item.payload?.total || 0);
+    const percentage = totalBagian ? ((value / totalBagian) * 100).toFixed(1) : '0.0';
+    return (
+        <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{name}</p>
+            <p style={{ margin: 0, color: komoditiColor, fontWeight: 600 }}>{value.toLocaleString('id-ID')} TK ({percentage}%)</p>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat detail desa →</p>
+        </div>
+    );
+}
+
+function DesaTooltip({ active, payload, label }: ChartTooltipProps) {
+    if (!active || !payload?.length) return null;
+    const isLainnya = label === 'Lainnya';
+    return (
+        <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{label}</p>
+            <p style={{ margin: 0, color: '#1e5fd4', fontWeight: 600 }}>{Number(payload[0]?.value || 0).toLocaleString('id-ID')} TK</p>
+            {isLainnya && <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat desa detail →</p>}
+        </div>
+    );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
 
 const KOMODITI_COLORS: Record<string, string> = {
     'PG2': '#1e5fd4',
@@ -19,7 +97,6 @@ const KOMODITI_COLORS: Record<string, string> = {
     'Warehouse': '#0891b2',
 };
 
-const PIE_FALLBACK = '#94a3b8';
 const BAGIAN_COLORS = [
     '#1e5fd4', '#0ea573', '#f59e0b', '#7c3aed', '#e11d48',
     '#0891b2', '#ea580c', '#65a30d', '#0d9488', '#9333ea',
@@ -27,14 +104,18 @@ const BAGIAN_COLORS = [
 
 export default function TKChart({ uploadId }: { uploadId: string | null }) {
     const [selectedKomoditi, setSelectedKomoditi] = useState<string>('Semua');
-    const [dataTK, setDataTK] = useState<any[]>([]);
+    const [dataTK, setDataTK] = useState<TKRow[]>([]);
     const [topDesa, setTopDesa] = useState<string[]>([]);
-    const [komoditiSummary, setKomoditiSummary] = useState<any[]>([]);
-    const [totalRows, setTotalRows] = useState(0);
+    const [komoditiSummary, setKomoditiSummary] = useState<KomoditiSummary[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Drill-down state
-    const [selectedBagian, setSelectedBagian] = useState<any | null>(null);
+    const [selectedBagianState, setSelectedBagianState] = useState<{ filterKey: string; data: SelectedBagian } | null>(null);
+    const filterKey = `${uploadId ?? ''}:${selectedKomoditi}`;
+    const selectedBagian = selectedBagianState?.filterKey === filterKey ? selectedBagianState.data : null;
+    const setSelectedBagian = (data: SelectedBagian | null) => {
+        setSelectedBagianState(data ? { filterKey, data } : null);
+    };
 
     // Modal state (desa lainnya)
     const [modalData, setModalData] = useState<{ bagian: string; details: [string, number][] } | null>(null);
@@ -42,45 +123,45 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
     const isInitialLoad = React.useRef(true);
     const router = useRouter();
 
-    const fetchData = useCallback(async (komoditi: string, currentUploadId: string | null) => {
-        setLoading(true);
-        setSelectedBagian(null); // Reset drill-down on komoditi change
-        try {
-            const queryParams = new URLSearchParams();
-            if (komoditi !== 'Semua') queryParams.append('komoditi', komoditi);
-            if (currentUploadId) queryParams.append('upload_id', currentUploadId);
-            queryParams.append('t', String(Date.now()));
+    useEffect(() => {
+        const controller = new AbortController();
+        const load = async () => {
+            try {
+                const queryParams = new URLSearchParams();
+                if (selectedKomoditi !== 'Semua') queryParams.append('komoditi', selectedKomoditi);
+                if (uploadId) queryParams.append('upload_id', uploadId);
+                queryParams.append('t', String(Date.now()));
 
-            const params = `?${queryParams.toString()}`;
-            const res = await fetch(`/api/chart-tk${params}`, { cache: 'no-store' });
-            if (!res.ok) throw new Error('Gagal mengambil data chart');
-            const json = await res.json();
-            if (json.data) {
-                setDataTK(json.data);
-                setTopDesa(json.topDesa || []);
-                setTotalRows(json.totalRows || 0);
-                if (json.komoditiSummary) {
-                    setKomoditiSummary(json.komoditiSummary);
-                    if (isInitialLoad.current && komoditi === 'Semua' && json.komoditiSummary.length > 0) {
-                        isInitialLoad.current = false;
-                        const biggest = json.komoditiSummary.reduce((prev: any, curr: any) =>
-                            curr.value > prev.value ? curr : prev
-                        );
-                        setSelectedKomoditi(biggest.name);
-                        return;
+                const res = await fetch(`/api/chart-tk?${queryParams.toString()}`, {
+                    cache: 'no-store',
+                    signal: controller.signal,
+                });
+                if (!res.ok) throw new Error('Gagal mengambil data chart');
+                const json = await res.json() as TKChartResponse;
+                if (json.data) {
+                    setDataTK(json.data);
+                    setTopDesa(json.topDesa || []);
+                    if (json.komoditiSummary) {
+                        setKomoditiSummary(json.komoditiSummary);
+                        if (isInitialLoad.current && selectedKomoditi === 'Semua' && json.komoditiSummary.length > 0) {
+                            isInitialLoad.current = false;
+                            const biggest = json.komoditiSummary.reduce((prev, curr) =>
+                                curr.value > prev.value ? curr : prev
+                            );
+                            setSelectedKomoditi(biggest.name);
+                            return;
+                        }
                     }
                 }
+            } catch (error) {
+                if (!controller.signal.aborted) console.error(error);
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
             }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData(selectedKomoditi, uploadId);
-    }, [selectedKomoditi, uploadId, fetchData]);
+        };
+        void load();
+        return () => controller.abort();
+    }, [selectedKomoditi, uploadId]);
 
     // KPI data
     const kpis = useMemo(() => {
@@ -92,10 +173,10 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
             const rowTotal = Number(row.total) || 0;
             totalTK += rowTotal;
             if (rowTotal > biggestBagian.count) biggestBagian = { name: row.bagian, count: rowTotal };
-            topDesa.forEach(d => { desaMap[d] = (desaMap[d] || 0) + (row[d] || 0); });
+            topDesa.forEach(d => { desaMap[d] = (desaMap[d] || 0) + (Number(row[d]) || 0); });
         });
 
-        let biggestDesa = Object.entries(desaMap).reduce(
+        const biggestDesa = Object.entries(desaMap).reduce(
             (best, [desa, count]) => count > best.count ? { name: desa, count } : best,
             { name: '-', count: 0 }
         );
@@ -118,7 +199,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                 _raw: row,
             }))
             .sort((a, b) => b.total - a.total);
-    }, [dataTK, topDesa]);
+    }, [dataTK]);
 
     // Level 2: Data for desa bar chart (when a bagian is selected)
     const desaChartData = useMemo(() => {
@@ -126,7 +207,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
         const row = selectedBagian._raw;
         return [
             ...topDesa
-                .map(desa => ({ desa, count: row[desa] || 0 }))
+                .map(desa => ({ desa, count: Number(row[desa]) || 0 }))
                 .filter(d => d.count > 0)
                 .sort((a, b) => b.count - a.count),
         ];
@@ -136,13 +217,21 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
     const totalKomoditi = komoditiSummary.reduce((sum, entry) => sum + entry.value, 0);
     const totalBagian = bagianChartData.reduce((sum, entry) => sum + entry.total, 0);
 
-    const handleBagianClick = (data: any) => {
-        const item = data?.payload || data;
-        if (item && item.bagian) setSelectedBagian(item);
+    const handleSelectKomoditi = (komoditi: string) => {
+        setLoading(true);
+        setSelectedKomoditi(komoditi);
     };
 
-    const handleDesaClick = (data: any) => {
-        if (data?.desa === 'Lainnya' && selectedBagian?._raw?.lainnyaDetails) {
+    const handleBagianClick = (data: unknown) => {
+        const item = isRecord(data) && isRecord(data.payload) ? data.payload : data;
+        if (!isRecord(item) || typeof item.bagian !== 'string' || typeof item.total !== 'number' || !isRecord(item._raw)) return;
+        const row = item._raw;
+        if (typeof row.bagian !== 'string' || typeof row.total !== 'number') return;
+        setSelectedBagian({ bagian: item.bagian, total: item.total, _raw: row as TKRow });
+    };
+
+    const handleDesaClick = (data: unknown) => {
+        if (isRecord(data) && data.desa === 'Lainnya' && selectedBagian?._raw.lainnyaDetails) {
             const detailsArray = Object.entries(selectedBagian._raw.lainnyaDetails)
                 .map(([name, count]) => [name, count] as [string, number])
                 .sort((a, b) => b[1] - a[1]);
@@ -156,34 +245,6 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
         if (selectedBagian) params.append('bagian', selectedBagian.bagian);
         if (uploadId) params.append('upload_id', uploadId);
         router.push(`/tk-detail?${params.toString()}`);
-    };
-
-    // Custom tooltips
-    const BagianTooltip = ({ active, payload, label }: any) => {
-        if (!active || !payload?.length) return null;
-        const item = payload[0];
-        const name = item.name || item.payload?.bagian || label;
-        const value = Number(item.value || item.payload?.total || 0);
-        const percentage = totalBagian ? ((value / totalBagian) * 100).toFixed(1) : '0.0';
-        return (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{name}</p>
-                <p style={{ margin: 0, color: komoditiColor, fontWeight: 600 }}>{value.toLocaleString('id-ID')} TK ({percentage}%)</p>
-                <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat detail desa →</p>
-            </div>
-        );
-    };
-
-    const DesaTooltip = ({ active, payload, label }: any) => {
-        if (!active || !payload?.length) return null;
-        const isLainnya = label === 'Lainnya';
-        return (
-            <div style={{ background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 13 }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#0f172a' }}>{label}</p>
-                <p style={{ margin: 0, color: '#1e5fd4', fontWeight: 600 }}>{payload[0]?.value?.toLocaleString('id-ID')} TK</p>
-                {isLainnya && <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Klik untuk lihat desa detail →</p>}
-            </div>
-        );
     };
 
     return (
@@ -241,9 +302,9 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                     <PieChart className="chart-interactive" style={{ outline: 'none', overflow: 'visible' }}>
                                         <Pie data={komoditiSummary} dataKey="value" nameKey="name" isAnimationActive={false} cx="50%" cy="50%"
                                             innerRadius={78} outerRadius={108} paddingAngle={3} cursor="pointer"
-                                            onClick={(d: any) => d?.name && setSelectedKomoditi(d.name)} stroke="none" cornerRadius={4}
+                                            onClick={d => d?.name && handleSelectKomoditi(d.name)} stroke="none" cornerRadius={4}
                                             labelLine={false}
-                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                            label={({ cx, cy, midAngle = 0, innerRadius, outerRadius, percent = 0 }) => {
                                                 if ((percent || 0) < 0.04) return null;
                                                 const radius = (innerRadius + outerRadius) / 2;
                                                 const angle = -midAngle * Math.PI / 180;
@@ -264,7 +325,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                             ))}
                                             <Label value={selectedKomoditi} position="center" style={{ fontSize: 15, fontWeight: 800, fill: '#0f172a' }} />
                                         </Pie>
-                                        <Tooltip formatter={(v: any) => [`${Number(v || 0).toLocaleString('id-ID')} TK`, 'Total']}
+                                        <Tooltip formatter={v => [`${Number(v || 0).toLocaleString('id-ID')} TK`, 'Total']}
                                             contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -273,7 +334,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                 {komoditiSummary.map((entry) => (
                                     <button
                                         key={entry.name}
-                                        onClick={() => setSelectedKomoditi(entry.name)}
+                                        onClick={() => handleSelectKomoditi(entry.name)}
                                         aria-label={`Filter ${entry.name}`}
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, background: 'transparent', padding: 0, color: selectedKomoditi === entry.name ? '#0f172a' : '#64748b', fontSize: 11, fontWeight: selectedKomoditi === entry.name ? 700 : 500, cursor: 'pointer' }}
                                     >
@@ -283,7 +344,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                 ))}
                             </div>
                             {selectedKomoditi !== 'Semua' && (
-                                <button onClick={() => setSelectedKomoditi('Semua')}
+                                <button onClick={() => handleSelectKomoditi('Semua')}
                                     style={{ marginTop: 14, width: '100%', padding: '8px', borderRadius: 10, border: '1px dashed #cbd5e1', background: 'transparent', color: '#64748b', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
                                     Tampilkan Semua Komoditi
                                 </button>
@@ -322,7 +383,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                                 <XAxis type="number" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                                 <YAxis type="category" dataKey="desa" tick={{ fontSize: 13, fill: '#334155', fontWeight: 500 }} width={140} axisLine={false} tickLine={false} />
                                                 <Tooltip content={<DesaTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                                <Bar dataKey="count" isAnimationActive={false} radius={[0, 8, 8, 0]} onClick={(data) => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: (v: any) => v > 0 ? v : '' }}>
+                                                <Bar dataKey="count" isAnimationActive={false} radius={[0, 8, 8, 0]} onClick={data => handleDesaClick(data)} style={{ cursor: 'pointer' }} label={{ position: 'right', fontSize: 12, fontWeight: 600, fill: '#475569', formatter: v => Number(v) > 0 ? v : '' }}>
                                                     {desaChartData.map((entry, i) => (
                                                         <Cell key={i} fill={entry.desa === 'Lainnya' ? '#cbd5e1' : komoditiColor} fillOpacity={entry.desa === 'Lainnya' ? 1 : 1 - (i * 0.07)} />
                                                     ))}
@@ -360,7 +421,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                                     innerRadius={78} outerRadius={108} paddingAngle={2} cursor="pointer"
                                                     onClick={(d) => handleBagianClick(d)} stroke="none" cornerRadius={4}
                                                     labelLine={false}
-                                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                                    label={({ cx, cy, midAngle = 0, innerRadius, outerRadius, percent = 0 }) => {
                                                         if ((percent || 0) < 0.04) return null;
                                                         const radius = (innerRadius + outerRadius) / 2;
                                                         const angle = -midAngle * Math.PI / 180;
@@ -377,7 +438,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                                                     ))}
                                                     <Label value="Pilih Bagian" position="center" style={{ fontSize: 14, fontWeight: 700, fill: '#64748b' }} />
                                                 </Pie>
-                                                <Tooltip content={<BagianTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                                <Tooltip content={<BagianTooltip totalBagian={totalBagian} komoditiColor={komoditiColor} />} cursor={{ fill: '#f8fafc' }} />
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -415,7 +476,7 @@ export default function TKChart({ uploadId }: { uploadId: string | null }) {
                     <div style={{ background: '#fff', width: 440, maxWidth: '90%', maxHeight: '80vh', borderRadius: 16, boxShadow: '0 20px 50px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>Desa "Lainnya"</h3>
+                                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>Desa &quot;Lainnya&quot;</h3>
                                 <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Bagian: <strong style={{ color: '#1e5fd4' }}>{modalData.bagian}</strong></p>
                             </div>
                             <button onClick={() => setModalData(null)}

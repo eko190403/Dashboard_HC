@@ -5,6 +5,22 @@ import ClientEmployeeTable from '@/components/ClientEmployeeTable';
 
 export const revalidate = 0;
 
+interface VillageEmployee {
+    id: string | number;
+    employee_name: string | null;
+    birth_date: string | null;
+    age: number | null;
+    gender: string | null;
+    employment_status: string | null;
+    street_address: string | null;
+    kecamatan: string | null;
+}
+
+interface VillageSummary {
+    jumlah_laki: number | null;
+    jumlah_perempuan: number | null;
+}
+
 export default async function VillagePage({ params }: { params: Promise<{ nama_desa: string }> }) {
     const { nama_desa } = await params;
     const decodedNamaDesa = decodeURIComponent(nama_desa);
@@ -17,9 +33,9 @@ export default async function VillagePage({ params }: { params: Promise<{ nama_d
         .limit(1)
         .single();
 
-    let employees: any[] = [];
+    let employees: VillageEmployee[] = [];
     let kecamatan = '';
-    let summary: any = null;
+    let summary: VillageSummary | null = null;
 
     if (!uploadError && latestUpload) {
         // Fetch employees
@@ -33,7 +49,7 @@ export default async function VillagePage({ params }: { params: Promise<{ nama_d
         if (!empError && empData) {
             employees = empData;
             if (employees.length > 0) {
-                kecamatan = employees[0].kecamatan;
+                kecamatan = employees[0].kecamatan || '';
             }
         }
 

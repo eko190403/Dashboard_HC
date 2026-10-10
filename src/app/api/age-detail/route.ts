@@ -79,8 +79,11 @@ export async function GET(request: NextRequest) {
             pageSize: PAGE_SIZE,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching age details:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

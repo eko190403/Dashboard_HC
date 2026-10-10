@@ -3,6 +3,14 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+interface MandorSummary {
+    nama_mandor: string;
+    kit_mandor: string;
+    kasi: string;
+    komoditi: string;
+    total_tk: number;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -30,7 +38,7 @@ export async function GET(request: NextRequest) {
         if (error) throw error;
 
         // Grouping and counting manually since Supabase doesn't have native GroupBy yet for REST
-        const mandorMap = new Map<string, any>();
+        const mandorMap = new Map<string, MandorSummary>();
         
         data.forEach(item => {
             if (!item.nama_mandor) return;
@@ -44,7 +52,8 @@ export async function GET(request: NextRequest) {
                     total_tk: 0
                 });
             }
-            mandorMap.get(key).total_tk += 1;
+            const summary = mandorMap.get(key);
+            if (summary) summary.total_tk += 1;
         });
 
         let result = Array.from(mandorMap.values());
@@ -58,8 +67,11 @@ export async function GET(request: NextRequest) {
         result.sort((a, b) => b.total_tk - a.total_tk);
 
         return NextResponse.json({ data: result });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error in mandor-summary API:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'Internal Server Error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -16,25 +16,48 @@ const AGE_RANGES = [
     { name: '> 55 Tahun',    href: '/age-detail?range=55%2B', color: '#e11d48' },
 ];
 
+let cachedUserRaw: string | null | undefined;
+let cachedUser: User | null = null;
+
+function getUserSnapshot(): User | null {
+    if (typeof window === 'undefined') return null;
+    let raw: string | null;
+    try {
+        raw = window.localStorage.getItem('hr_pg2_user');
+    } catch {
+        return null;
+    }
+    if (raw !== cachedUserRaw) {
+        cachedUserRaw = raw;
+        cachedUser = getUser();
+    }
+    return cachedUser;
+}
+
+function subscribeToUserUpdates(onChange: () => void) {
+    window.addEventListener('hr-user-updated', onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener('hr-user-updated', onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
+
 export default function Sidebar() {
     const pathname = usePathname();
-    const [user, setUser] = useState<User | null>(null);
-    const [ageOpen, setAgeOpen] = useState(false);
+    const user = useSyncExternalStore(subscribeToUserUpdates, getUserSnapshot, () => null);
+    const [ageState, setAgeState] = useState(() => ({
+        pathname,
+        open: pathname.startsWith('/age-detail'),
+    }));
 
-    useEffect(() => {
-        setUser(getUser());
-    }, [pathname]);
-
-    useEffect(() => {
-        const handleUserUpdate = (event: Event) => setUser((event as CustomEvent<User>).detail);
-        window.addEventListener('hr-user-updated', handleUserUpdate);
-        return () => window.removeEventListener('hr-user-updated', handleUserUpdate);
-    }, []);
-
-    // Auto-expand age group if on age-detail page
-    useEffect(() => {
-        if (pathname.startsWith('/age-detail')) setAgeOpen(true);
-    }, [pathname]);
+    if (ageState.pathname !== pathname) {
+        setAgeState({
+            pathname,
+            open: ageState.open || pathname.startsWith('/age-detail'),
+        });
+    }
+    const ageOpen = ageState.open;
 
     if (pathname === '/login') return null;
 
@@ -129,7 +152,7 @@ export default function Sidebar() {
                     <div>
                         <div
                             style={{ ...navItemStyle(isAgeActive && !ageOpen), display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, marginBottom: 2, fontSize: 13, cursor: 'pointer', color: isAgeActive ? '#1e5fd4' : '#5a7184', background: isAgeActive && !ageOpen ? '#e9f0fc' : 'transparent', fontWeight: isAgeActive ? 600 : 400, transition: 'background 0.15s', userSelect: 'none' }}
-                            onClick={() => setAgeOpen(o => !o)}
+                            onClick={() => setAgeState(current => ({ ...current, open: !current.open }))}
                             onMouseEnter={e => { if (!isAgeActive) { (e.currentTarget as HTMLElement).style.background = '#f7f9fc'; (e.currentTarget as HTMLElement).style.color = '#1a2b4a'; } }}
                             onMouseLeave={e => { if (!isAgeActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#5a7184'; } }}
                         >

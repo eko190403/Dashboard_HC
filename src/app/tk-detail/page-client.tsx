@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Search, Download, Users, Filter, ChevronDown, ChevronLeft, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
@@ -20,14 +20,24 @@ const KOMODITI_COLORS: Record<string, string> = {
     'Semua': '#1e5fd4',
 };
 
+interface TKDetailRow {
+    kit_tk: string | null;
+    employee_name: string | null;
+    gender: string | null;
+    kit_mandor: string | null;
+    nama_mandor: string | null;
+    kasi: string | null;
+    indeks_tk: number | string | null;
+    bagian: string | null;
+}
+
 export default function DetailTKPage() {
     const searchParams = useSearchParams();
 
     const initialKomoditi = searchParams.get('komoditi') || 'Semua';
     const initialBagian = searchParams.get('bagian') || '';
 
-    const [data, setData] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<TKDetailRow[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [filterBagian, setFilterBagian] = useState(initialBagian);
@@ -38,6 +48,9 @@ export default function DetailTKPage() {
     const [totalCount, setTotalCount] = useState(0);
     const [bagianList, setBagianList] = useState<string[]>([]);
     const [komoditiList, setKomoditiList] = useState<string[]>([]);
+    const queryKey = JSON.stringify([filterKomoditi, filterBagian, filterGender, debouncedSearch, page]);
+    const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null);
+    const loading = loadedQueryKey !== queryKey;
 
     const komoditiColor = KOMODITI_COLORS[filterKomoditi] || '#1e5fd4';
 
@@ -81,31 +94,35 @@ export default function DetailTKPage() {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
-            if (filterBagian) params.append('bagian', filterBagian);
-            if (filterGender !== 'Semua') params.append('gender', filterGender);
-            if (debouncedSearch) params.append('search', debouncedSearch);
-            params.append('page', String(page));
-
-            const res = await fetch(`/api/tk-details?${params.toString()}`);
-            const json = await res.json();
-            setData(json.data || []);
-            setTotalPages(json.totalPages || 1);
-            setTotalCount(json.totalCount || 0);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, [filterKomoditi, filterBagian, filterGender, debouncedSearch, page]);
-
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        let cancelled = false;
+        const fetchData = async () => {
+            try {
+                const params = new URLSearchParams();
+                if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
+                if (filterBagian) params.append('bagian', filterBagian);
+                if (filterGender !== 'Semua') params.append('gender', filterGender);
+                if (debouncedSearch) params.append('search', debouncedSearch);
+                params.append('page', String(page));
+
+                const res = await fetch(`/api/tk-details?${params.toString()}`);
+                const json = await res.json();
+                if (!cancelled) {
+                    setData(json.data || []);
+                    setTotalPages(json.totalPages || 1);
+                    setTotalCount(json.totalCount || 0);
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                if (!cancelled) setLoadedQueryKey(queryKey);
+            }
+        };
+        void fetchData();
+        return () => {
+            cancelled = true;
+        };
+    }, [filterKomoditi, filterBagian, filterGender, debouncedSearch, page, queryKey]);
 
     // Reset page when filters change
     const handleKomoditiChange = (val: string) => {

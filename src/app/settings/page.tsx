@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, Bell, Check, Monitor, RotateCcw, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -16,22 +16,46 @@ const defaultSettings: AppSettings = {
     showNotifications: true,
 };
 
+function subscribeToSettings(onChange: () => void) {
+    window.addEventListener('storage', onChange);
+    return () => window.removeEventListener('storage', onChange);
+}
+
+function getSettingsSnapshot() {
+    try {
+        return window.localStorage.getItem(SETTINGS_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function parseSettings(raw: string | null): AppSettings {
+    if (!raw) return defaultSettings;
+    try {
+        const value: unknown = JSON.parse(raw);
+        if (typeof value !== 'object' || value === null) return defaultSettings;
+        const stored = value as Partial<AppSettings>;
+        return {
+            compactMode: typeof stored.compactMode === 'boolean' ? stored.compactMode : defaultSettings.compactMode,
+            showNotifications: typeof stored.showNotifications === 'boolean' ? stored.showNotifications : defaultSettings.showNotifications,
+        };
+    } catch {
+        return defaultSettings;
+    }
+}
+
 export default function SettingsPage() {
-    const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+    const settingsJson = useSyncExternalStore(subscribeToSettings, getSettingsSnapshot, () => null);
+    return <SettingsEditor key={settingsJson ?? 'defaults'} initialSettings={parseSettings(settingsJson)} />;
+}
+
+function SettingsEditor({ initialSettings }: { initialSettings: AppSettings }) {
+    const [settings, setSettings] = useState<AppSettings>(initialSettings);
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        try {
-            const raw = localStorage.getItem(SETTINGS_KEY);
-            if (raw) {
-                const stored = { ...defaultSettings, ...JSON.parse(raw) };
-                setSettings(stored);
-                document.documentElement.dataset.compact = stored.compactMode ? 'true' : 'false';
-            }
-        } catch {
-            setSettings(defaultSettings);
-        }
-    }, []);
+        document.documentElement.dataset.compact = settings.compactMode ? 'true' : 'false';
+    }, [settings.compactMode]);
 
     const updateSetting = (key: keyof AppSettings) => {
         setSettings(current => ({ ...current, [key]: !current[key] }));

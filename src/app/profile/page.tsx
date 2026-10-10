@@ -1,22 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, Camera, Check, Mail, ShieldCheck, UserCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { getUser, type User, updateUser } from '@/lib/auth';
 
-export default function ProfilePage() {
-    const [user, setUser] = useState<User | null>(null);
-    const [name, setName] = useState('');
-    const [photo, setPhoto] = useState('');
-    const [saved, setSaved] = useState(false);
+let cachedUserRaw: string | null | undefined;
+let cachedUser: User | null = null;
 
-    useEffect(() => {
-        const current = getUser();
-        setUser(current);
-        setName(current?.name || '');
-        setPhoto(current?.avatar || '');
-    }, []);
+function getUserSnapshot(): User | null {
+    if (typeof window === 'undefined') return null;
+    let raw: string | null;
+    try {
+        raw = window.localStorage.getItem('hr_pg2_user');
+    } catch {
+        return null;
+    }
+    if (raw !== cachedUserRaw) {
+        cachedUserRaw = raw;
+        cachedUser = getUser();
+    }
+    return cachedUser;
+}
+
+function subscribeToUserUpdates(onChange: () => void) {
+    window.addEventListener('hr-user-updated', onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener('hr-user-updated', onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
+
+export default function ProfilePage() {
+    const user = useSyncExternalStore(subscribeToUserUpdates, getUserSnapshot, () => null);
+
+    if (!user) return null;
+    return <ProfileEditor key={user.username} user={user} />;
+}
+
+function ProfileEditor({ user }: { user: User }) {
+    const [name, setName] = useState(user.name);
+    const [photo, setPhoto] = useState(user.avatar || '');
+    const [saved, setSaved] = useState(false);
 
     const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -31,13 +57,10 @@ export default function ProfilePage() {
     const handleSave = () => {
         const updated = updateUser({ name, avatar: photo || undefined });
         if (updated) {
-            setUser(updated);
             setName(updated.name);
             setSaved(true);
         }
     };
-
-    if (!user) return null;
 
     return (
         <div className="settings-page">
