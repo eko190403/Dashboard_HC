@@ -67,9 +67,9 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(bytes);
         const supabaseAdmin = getSupabaseAdmin();
 
-        // Upload original file to Supabase Storage Bucket 'excel-backups' if needed
-        // For now, we will process it first
+        // Keep the original workbook so authorized users can download it with the summary sheet.
         const filename = `${Date.now()}_${file.name}`;
+        let backupPath: string | null = null;
         
         const { error: storageError } = await supabaseAdmin.storage
             .from('excel-backups')
@@ -78,7 +78,9 @@ export async function POST(request: NextRequest) {
             });
         
         if (storageError) {
-            console.warn('Could not upload to storage bucket. Proceeding with parsing...', storageError);
+            throw new Error(`Failed to store original upload for full-data download: ${storageError.message}`);
+        } else {
+            backupPath = filename;
         }
 
         // Parse with SheetJS
@@ -311,6 +313,7 @@ export async function POST(request: NextRequest) {
             skippedNonActive,
             validRows: deduplicatedData.length,
             totalRowsRead: rawData.length,
+            backup_path: backupPath,
         };
 
         // Prepare data for summary_domisili

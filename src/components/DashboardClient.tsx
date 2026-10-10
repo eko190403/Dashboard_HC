@@ -201,6 +201,33 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         }
     };
 
+    const handleDownloadFullData = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (currentUploadId) params.set('upload_id', currentUploadId);
+            const response = await fetch(`/api/export-full-data?${params.toString()}`);
+            if (!response.ok) {
+                const result = await response.json().catch(() => null);
+                throw new Error(result?.error || 'Gagal mengunduh data lengkap.');
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            link.href = url;
+            link.download = filenameMatch
+                ? decodeURIComponent(filenameMatch[1])
+                : `Data_Lengkap_PG2_${new Date(initialData.lastUpdated).toISOString().slice(0, 10)}.xlsx`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error) {
+            console.error('Full data export error:', error);
+            alert(error instanceof Error ? error.message : 'Gagal mengunduh data lengkap.');
+        }
+    };
+
     const uniqueDistricts = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kecamatan))).filter(Boolean).sort()];
     const uniqueVillages = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.nama_desa))).filter(Boolean).sort()];
 
@@ -823,6 +850,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             title="Export ringkasan laporan ke Excel"
                         >
                             <Download size={14} /> Export Excel
+                        </button>
+                        <button
+                            className="btn-secondary"
+                            onClick={handleDownloadFullData}
+                            title="Unduh file asli dengan sheet ringkasan"
+                        >
+                            <FileSpreadsheet size={14} /> Data Lengkap
                         </button>
                         <button
                             className="btn-secondary"

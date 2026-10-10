@@ -31,6 +31,10 @@ Row-level security is enabled on `employee_master` without public policies. The 
 
 The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; upload replacement runs in a single PostgreSQL transaction through `replace_monthly_upload`. Browser reads continue using the anon key.
 
+## Downloading the original upload with its summary
+
+The dashboard's **Data Lengkap** action downloads the original workbook stored in the private `excel-backups` bucket for the selected upload and adds a `Ringkasan` sheet with village/district totals and the Top 10 village chart. Access is limited to People Partner and HR Manager accounts. New uploads record their exact backup object path in `upload_logs.audit_summary`; existing uploads are matched against stored backup object names where possible. An upload without an available backup must be uploaded again before its original workbook can be downloaded.
+
 ## Authentication setup
 
 The application uses Supabase Auth with cookie-based sessions. The existing `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` variables are sufficient; `AUTH_SESSION_SECRET` and `HR_USERS_JSON` are not used.
