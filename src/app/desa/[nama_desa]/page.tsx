@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, Users, MapPin } from 'lucide-react';
+import { ArrowLeft, Download, Users, MapPin } from 'lucide-react';
 import ClientEmployeeTable from '@/components/ClientEmployeeTable';
 
 export const revalidate = 0;
@@ -52,6 +52,8 @@ export default async function VillagePage({ params }: { params: Promise<{ nama_d
 
     const totalLaki = employees.filter(e => e.gender === 'male' || e.gender === 'laki-laki').length;
     const totalPerempuan = employees.filter(e => e.gender === 'female' || e.gender === 'perempuan').length;
+    const exportParams = new URLSearchParams({ nama_desa: decodedNamaDesa });
+    if (latestUpload?.id) exportParams.set('upload_id', latestUpload.id);
 
     return (
         <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
@@ -72,6 +74,27 @@ export default async function VillagePage({ params }: { params: Promise<{ nama_d
                         Kecamatan: {kecamatan || '—'}
                     </p>
                 </div>
+                <a
+                    href={`/api/export-village?${exportParams.toString()}`}
+                    aria-disabled={!latestUpload}
+                    tabIndex={latestUpload ? 0 : -1}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '9px 16px',
+                        borderRadius: 8,
+                        border: '1px solid #dde3ed',
+                        background: latestUpload ? '#fff' : '#f8fafc',
+                        color: latestUpload ? '#1a2b4a' : '#94a3b8',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        pointerEvents: latestUpload ? 'auto' : 'none',
+                    }}
+                >
+                    <Download size={15} /> Unduh Data Desa
+                </a>
             </div>
 
             {/* KPI Cards */}
