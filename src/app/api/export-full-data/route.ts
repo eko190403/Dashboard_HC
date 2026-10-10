@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import { createRequestSupabaseClient, getAuthUser } from '@/lib/auth-server';
+import { createRequestSupabaseClient } from '@/lib/auth-server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { addSummaryWorksheet, type SummaryRow } from '@/lib/summary-workbook';
 
@@ -127,11 +127,6 @@ export async function GET(request: NextRequest) {
         if (authError || !user) {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
         }
-        const authUser = getAuthUser(user);
-        if (authUser.role === 'Staff') {
-            return NextResponse.json({ error: 'Unduhan data lengkap hanya tersedia untuk People Partner dan HR Manager.' }, { status: 403 });
-        }
-
         const { searchParams } = new URL(request.url);
         const admin = getSupabaseAdmin();
         const uploadId = searchParams.get('upload_id');
