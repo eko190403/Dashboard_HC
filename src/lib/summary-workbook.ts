@@ -1,5 +1,8 @@
 import ExcelJS from 'exceljs';
-import sharp from 'sharp';
+import { ImageResponse } from 'next/og';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createElement } from 'react';
 
 export type SummaryRow = {
     name: string;
@@ -7,62 +10,100 @@ export type SummaryRow = {
     percentage: number;
 };
 
-function escapeXml(value: string): string {
-    return value.replace(/[<>&'"]/g, character => ({
-        '<': '&lt;',
-        '>': '&gt;',
-        '&': '&amp;',
-        "'": '&apos;',
-        '"': '&quot;',
-    })[character] || character);
-}
+async function createVillageChart(villages: SummaryRow[]): Promise<Buffer> {
+    const fontPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'compiled', '@vercel', 'og', 'Geist-Regular.ttf');
+    const fontData = Uint8Array.from(await readFile(fontPath)).buffer;
+    const maxPercentage = Math.max(...villages.map(village => village.percentage), 0.01);
+    const rows = villages.map((village, index) => createElement(
+        'div',
+        {
+            key: village.name,
+            style: {
+                display: 'flex',
+                alignItems: 'center',
+                height: 31,
+                marginBottom: 4,
+            },
+        },
+        createElement('div', {
+            style: {
+                width: 195,
+                paddingRight: 12,
+                fontSize: 15,
+                color: '#1f2937',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
+        }, `${index + 1}. ${village.name}`),
+        createElement(
+            'div',
+            {
+                style: {
+                    display: 'flex',
+                    width: 430,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#e8edf5',
+                    overflow: 'hidden',
+                },
+            },
+            createElement('div', {
+                style: {
+                    width: `${Math.max(1, village.percentage / maxPercentage * 100)}%`,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#405f96',
+                },
+            }),
+        ),
+        createElement('div', {
+            style: {
+                width: 80,
+                paddingLeft: 12,
+                fontSize: 15,
+                fontWeight: 600,
+                color: '#1f2937',
+                textAlign: 'right',
+            },
+        }, `${village.percentage.toFixed(2)}%`),
+    ));
 
-function createVillageChart(villages: SummaryRow[]): string {
-    const width = 570;
-    const height = 350;
-    const left = 60;
-    const right = 125;
-    const top = 42;
-    const bottom = 105;
-    const chartWidth = width - left - right;
-    const chartHeight = height - top - bottom;
-    const maxPercentage = Math.max(...villages.map(village => village.percentage / 100), 0.01);
-    const maxValue = Math.max(0.02, Math.ceil(maxPercentage / 0.02) * 0.02);
-    const step = chartWidth / Math.max(villages.length, 1);
-    const barWidth = Math.min(16, step * 0.62);
-    const gridLines = Math.round(maxValue / 0.02);
+    const image = new ImageResponse(
+        createElement(
+            'div',
+            {
+                style: {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: '100%',
+                    height: '100%',
+                    padding: '24px 28px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 16,
+                    fontFamily: 'Geist',
+                },
+            },
+            createElement('div', {
+                style: {
+                    fontSize: 23,
+                    fontWeight: 700,
+                    color: '#1a2b4a',
+                    lineHeight: '30px',
+                    marginBottom: 12,
+                },
+            }, 'Top 10 Desa/Kelurahan (Persentase TK)'),
+            ...rows,
+        ),
+        {
+            width: 760,
+            height: 430,
+            fonts: [{ name: 'Geist', data: fontData, weight: 400, style: 'normal' }],
+        },
+    );
 
-    const grid = Array.from({ length: gridLines + 1 }, (_, index) => {
-        const value = maxValue * (gridLines - index) / gridLines;
-        const y = top + chartHeight * index / gridLines;
-        const tick = value === 0 ? '0' : value.toFixed(2).replace(/0$/, '');
-        return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#b7b7b7" stroke-width="1"/>
-            <text x="${left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#111827">${tick}</text>`;
-    }).join('');
-
-    const bars = villages.map((village, index) => {
-        const x = left + step * index + (step - barWidth) / 2;
-        const barHeight = (village.percentage / 100) / maxValue * chartHeight;
-        const y = top + chartHeight - barHeight;
-        const center = x + barWidth / 2;
-        const label = escapeXml(village.name);
-        const legendY = top + index * 18 + 15;
-        return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="#405f96"/>
-            <text x="${center}" y="${top + chartHeight + 18}" transform="rotate(-45 ${center} ${top + chartHeight + 18})" text-anchor="end" font-size="9" fill="#111827">${label}</text>
-            <rect x="${width - right + 18}" y="${legendY - 6}" width="6" height="6" fill="#405f96"/>
-            <text x="${width - right + 29}" y="${legendY}" font-size="9" fill="#111827">${label}</text>`;
-    }).join('');
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-        <rect width="100%" height="100%" fill="#ffffff"/>
-        <rect x="0.5" y="0.5" width="${width - 1}" height="${height - 1}" rx="14" fill="none" stroke="#a3a3a3"/>
-        <text x="${(left + width - right) / 2}" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#777777">Top 10 Desa/Kelurahan (Persentase TK)</text>
-        ${grid}
-        <line x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}" stroke="#9ca3af" stroke-width="1"/>
-        <text x="16" y="${top + chartHeight / 2}" transform="rotate(-90 16 ${top + chartHeight / 2})" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#111827">Persentase (%)</text>
-        <text x="${left + chartWidth / 2}" y="${height - 8}" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#111827">Desa / Kelurahan</text>
-        ${bars}
-    </svg>`;
+    return Buffer.from(await image.arrayBuffer());
 }
 
 function addSummaryTable(
@@ -167,10 +208,10 @@ export async function addSummaryWorksheet(
     }
     worksheet.getRow(3).eachCell(cell => { cell.alignment = { horizontal: 'center', vertical: 'middle' }; });
 
-    const chart = await sharp(Buffer.from(createVillageChart(chartRows))).png().toBuffer();
+    const chart = await createVillageChart(chartRows);
     const imageId = workbook.addImage({ base64: chart.toString('base64'), extension: 'png' });
     worksheet.addImage(imageId, {
         tl: { col: 3.15, row: 16 },
-        ext: { width: 570, height: 350 },
+        ext: { width: 570, height: 323 },
     });
 }
