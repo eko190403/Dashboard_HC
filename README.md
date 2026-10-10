@@ -33,35 +33,22 @@ The migrations also revoke direct client write privileges on upload and mandor t
 
 ## Authentication setup
 
-The application uses signed, HTTP-only sessions. Configure `AUTH_SESSION_SECRET` with at least 32 random bytes and `HR_USERS_JSON` with the permitted accounts in each server environment. Do not add either variable with a `NEXT_PUBLIC_` prefix or commit their values.
+The application uses Supabase Auth with cookie-based sessions. The existing `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` variables are sufficient; `AUTH_SESSION_SECRET` and `HR_USERS_JSON` are not used.
 
-Generate a session secret with:
+To create the first account:
 
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
-```
+1. In the Supabase project, open **Authentication → Users** and add a user with the email and password that will be used to sign in. Disable email confirmation for this account if the project does not have email delivery configured.
+2. In the Supabase SQL Editor, assign its trusted application role by replacing the email below:
 
-Generate each password hash by running `node scripts/hash-password.mjs` in an interactive terminal. It prompts for a password without echoing it and outputs a `scrypt$salt$digest` hash. Use passwords of at least 12 characters.
+   ```sql
+   update auth.users
+   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"HR Manager"}'::jsonb
+   where email = 'admin@example.com';
+   ```
 
-The previous demo passwords were embedded in earlier application versions. Treat them as compromised and do not reuse them.
+   Supported roles are `People Partner`, `HR Manager`, and `Staff`. Only `People Partner` and `HR Manager` may upload data, import mandor mappings, or roll back uploads. Accounts without an assigned role have `Staff` access. Roles are read from Supabase `app_metadata`, not user-editable metadata.
 
-Set `HR_USERS_JSON` to a JSON array with one entry per account. Each entry must include `username`, `name`, `role`, `initials`, and `passwordHash`. Supported roles are `People Partner`, `HR Manager`, and `Staff`. For example, after replacing the hash placeholder with the output from the hash script:
-
-```json
-[
-  {
-    "username": "people-partner",
-    "name": "People Partner",
-    "role": "People Partner",
-    "initials": "PP",
-    "passwordHash": "scrypt$replace-with-32-hex-salt$replace-with-128-hex-digest"
-  }
-]
-```
-
-All application pages and data APIs require a valid signed session. Only `People Partner` and `HR Manager` may upload data, import mandor mappings, or roll back uploads. Rotate `AUTH_SESSION_SECRET` to invalidate all active sessions.
-
-The login UI no longer contains demo credentials. Remove any previously disclosed or reused passwords and configure new password hashes before enabling the application.
+Sign in using the email and password created in Supabase. The login is verified against Supabase Auth, while the proxy refreshes the session cookies. Do not put passwords in source code or expose service-role keys in the browser.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

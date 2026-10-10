@@ -35,7 +35,7 @@ export default function LoginPage() {
       if (user) {
         router.replace('/');
       } else {
-        setError('Username atau password salah. Silakan coba lagi.');
+        setError('Email atau kata sandi salah. Silakan coba lagi.');
       }
     } catch {
       setError('Login gagal karena layanan autentikasi tidak tersedia.');
@@ -99,14 +99,14 @@ export default function LoginPage() {
           {/* Username field */}
           <div style={{ marginBottom: 16 }}>
             <label htmlFor="login-username" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 7, letterSpacing: '0.01em' }}>
-              Username
+              Email
             </label>
             <input
               id="login-username"
-              type="text"
+              type="email"
               value={username}
               onChange={e => { setUsername(e.target.value); setError(''); }}
-              placeholder="Masukkan username Anda"
+              placeholder="Masukkan email akun Anda"
               required
               autoComplete="username"
               style={{

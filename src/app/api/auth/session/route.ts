@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_SESSION_COOKIE, getSessionUser } from '@/lib/auth-server';
+import { createRequestSupabaseClient, getAuthUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
     try {
-        const user = getSessionUser(request.cookies.get(AUTH_SESSION_COOKIE)?.value);
-        if (!user) {
+        const supabase = createRequestSupabaseClient(request);
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
             return NextResponse.json(
                 { error: 'Authentication required' },
                 { status: 401, headers: { 'Cache-Control': 'no-store' } },
             );
         }
-        return NextResponse.json({ user }, { headers: { 'Cache-Control': 'no-store' } });
+        return NextResponse.json({ user: getAuthUser(user) }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (error) {
-        console.error('Authentication configuration failed:', error);
-        return NextResponse.json({ error: 'Authentication is not configured' }, { status: 503 });
+        console.error('Supabase authentication session check failed:', error);
+        return NextResponse.json({ error: 'Authentication service is unavailable' }, { status: 503 });
     }
 }
