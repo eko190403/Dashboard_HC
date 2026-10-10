@@ -256,6 +256,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         try {
             const params = new URLSearchParams();
             if (currentUploadId) params.set('upload_id', currentUploadId);
+            if (filterGenderVillage !== 'All') params.set('nama_desa', filterGenderVillage);
             const response = await fetch(`/api/export-full-data?${params.toString()}`);
             if (!response.ok) {
                 const result = await response.json().catch(() => null);

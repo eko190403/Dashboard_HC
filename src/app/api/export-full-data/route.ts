@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { createRequestSupabaseClient } from '@/lib/auth-server';
-import { addSummaryWorksheet, type SummaryRow } from '@/lib/summary-workbook';
+import { addSummaryWorksheet, type DistributionChart, type SummaryRow } from '@/lib/summary-workbook';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,6 +90,80 @@ function buildSummaryRows(employees: EmployeeRecord[], totalHc: number) {
     return { villageRows, districtRows, chartRows: namedVillages.slice(0, 10) };
 }
 
+function buildDistributionCharts(
+    employees: EmployeeRecord[],
+    selectedVillage: string | null,
+): DistributionChart[] {
+    let selectedEmployees = employees;
+    if (selectedVillage && selectedVillage !== 'All') {
+        if (selectedVillage === 'Desa Lainnya (< 20 TK)') {
+            const villageCounts = new Map<string, number>();
+            for (const employee of employees) {
+                const name = employee.nama_desa?.trim() || 'Tidak Diketahui';
+                villageCounts.set(name, (villageCounts.get(name) || 0) + 1);
+            }
+            const groupedVillageNames = new Set(
+                [...villageCounts.entries()]
+                    .filter(([name, count]) => count < 20 || name.startsWith('Format') || name.startsWith('Lokasi'))
+                    .map(([name]) => name),
+            );
+            selectedEmployees = employees.filter(employee => groupedVillageNames.has(employee.nama_desa?.trim() || 'Tidak Diketahui'));
+        } else {
+            selectedEmployees = employees.filter(employee => (employee.nama_desa?.trim() || 'Tidak Diketahui') === selectedVillage);
+        }
+    }
+
+    const genderCounts = new Map<string, number>([
+        ['Laki-laki', 0],
+        ['Perempuan', 0],
+        ['Tidak Diketahui', 0],
+    ]);
+    const ageCounts = new Map<string, number>([
+        ['18 - 35 Tahun', 0],
+        ['36 - 45 Tahun', 0],
+        ['46 - 55 Tahun', 0],
+        ['> 55 Tahun', 0],
+        ['Tidak Diketahui', 0],
+    ]);
+
+    for (const employee of selectedEmployees) {
+        const gender = employee.gender?.trim().toUpperCase();
+        const genderLabel = gender === 'L' || gender === 'MALE' || gender === 'LAKI-LAKI'
+            ? 'Laki-laki'
+            : gender === 'P' || gender === 'FEMALE' || gender === 'PEREMPUAN'
+                ? 'Perempuan'
+                : 'Tidak Diketahui';
+        genderCounts.set(genderLabel, (genderCounts.get(genderLabel) || 0) + 1);
+
+        const age = employee.age;
+        const ageLabel = age == null || !Number.isFinite(age) || age < 18
+            ? 'Tidak Diketahui'
+            : age <= 35
+                ? '18 - 35 Tahun'
+                : age <= 45
+                    ? '36 - 45 Tahun'
+                    : age <= 55
+                        ? '46 - 55 Tahun'
+                        : '> 55 Tahun';
+        ageCounts.set(ageLabel, (ageCounts.get(ageLabel) || 0) + 1);
+    }
+
+    const toRows = (counts: Map<string, number>): SummaryRow[] => {
+        const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+        return [...counts.entries()].map(([name, count]) => ({
+            name,
+            count,
+            percentage: total ? count / total * 100 : 0,
+        }));
+    };
+    const villageLabel = selectedVillage && selectedVillage !== 'All' ? selectedVillage : 'Semua Desa';
+
+    return [
+        { title: `Distribusi Gender - ${villageLabel}`, rows: toRows(genderCounts) },
+        { title: `Distribusi Umur - ${villageLabel}`, rows: toRows(ageCounts) },
+    ];
+}
+
 function addEmployeeWorksheet(workbook: ExcelJS.Workbook, employees: EmployeeRecord[]) {
     const worksheet = workbook.addWorksheet('Data Karyawan');
     worksheet.columns = [
@@ -150,7 +224,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
         }
 
-        const uploadId = new URL(request.url).searchParams.get('upload_id');
+        const { searchParams } = new URL(request.url);
+        const uploadId = searchParams.get('upload_id');
+        const selectedVillage = searchParams.get('nama_desa');
         let uploadQuery = supabase
             .from('upload_logs')
             .select('id, filename, total_hc, uploaded_at');
@@ -189,7 +265,15 @@ export async function GET(request: NextRequest) {
         workbook.creator = 'HR Dashboard PG 2';
         workbook.created = new Date();
         addEmployeeWorksheet(workbook, employees);
-        await addSummaryWorksheet(workbook, rows.villageRows, rows.districtRows, rows.chartRows, totalHc);
+        const distributionCharts = buildDistributionCharts(employees, selectedVillage);
+        await addSummaryWorksheet(
+            workbook,
+            rows.villageRows,
+            rows.districtRows,
+            rows.chartRows,
+            totalHc,
+            distributionCharts,
+        );
 
         const buffer = await workbook.xlsx.writeBuffer();
         const baseName = uploadRecord.filename.replace(/\.[^.]+$/, '');

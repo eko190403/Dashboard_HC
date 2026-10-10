@@ -10,9 +10,16 @@ export type SummaryRow = {
     percentage: number;
 };
 
+export type DistributionChart = {
+    title: string;
+    rows: SummaryRow[];
+};
+
+const chartFontPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'compiled', '@vercel', 'og', 'Geist-Regular.ttf');
+const chartFont = readFile(chartFontPath).then(font => Uint8Array.from(font).buffer);
+
 async function createVillageChart(villages: SummaryRow[]): Promise<Buffer> {
-    const fontPath = join(process.cwd(), 'node_modules', 'next', 'dist', 'compiled', '@vercel', 'og', 'Geist-Regular.ttf');
-    const fontData = Uint8Array.from(await readFile(fontPath)).buffer;
+    const fontData = await chartFont;
     const maxPercentage = Math.max(...villages.map(village => village.percentage), 0.01);
     const rows = villages.map((village, index) => createElement(
         'div',
@@ -106,6 +113,106 @@ async function createVillageChart(villages: SummaryRow[]): Promise<Buffer> {
     return Buffer.from(await image.arrayBuffer());
 }
 
+async function createDistributionChart(chart: DistributionChart): Promise<Buffer> {
+    const fontData = await chartFont;
+    const total = chart.rows.reduce((sum, row) => sum + row.count, 0);
+    const maxCount = Math.max(1, ...chart.rows.map(row => row.count));
+    const colors = ['#1e5fd4', '#e11d48', '#0ea573', '#f59e0b', '#94a3b8'];
+    const rows = chart.rows.map((row, index) => createElement(
+        'div',
+        {
+            key: row.name,
+            style: {
+                display: 'flex',
+                alignItems: 'center',
+                height: 34,
+                marginBottom: 9,
+            },
+        },
+        createElement('div', {
+            style: {
+                width: 122,
+                paddingRight: 8,
+                fontSize: 14,
+                color: '#1f2937',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+            },
+        }, row.name),
+        createElement(
+            'div',
+            {
+                style: {
+                    display: 'flex',
+                    width: 245,
+                    height: 19,
+                    borderRadius: 10,
+                    backgroundColor: '#e8edf5',
+                    overflow: 'hidden',
+                },
+            },
+            createElement('div', {
+                style: {
+                    width: `${row.count ? Math.max(1, row.count / maxCount * 100) : 0}%`,
+                    height: 19,
+                    borderRadius: 10,
+                    backgroundColor: colors[index % colors.length],
+                },
+            }),
+        ),
+        createElement('div', {
+            style: {
+                display: 'flex',
+                flexDirection: 'column',
+                width: 100,
+                paddingLeft: 8,
+                fontSize: 14,
+                color: '#1f2937',
+                textAlign: 'right',
+            },
+        },
+        createElement('span', { style: { fontWeight: 600 } }, row.count.toLocaleString('id-ID')),
+        createElement('span', { style: { color: '#64748b', fontSize: 11 } }, `${total ? (row.count / total * 100).toFixed(2) : '0.00'}%`)),
+    ));
+
+    const image = new ImageResponse(
+        createElement(
+            'div',
+            {
+                style: {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: '100%',
+                    height: '100%',
+                    padding: '20px 22px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 16,
+                    fontFamily: 'Geist',
+                },
+            },
+            createElement('div', {
+                style: {
+                    fontSize: 19,
+                    fontWeight: 700,
+                    color: '#1a2b4a',
+                    lineHeight: '26px',
+                    marginBottom: 22,
+                },
+            }, chart.title),
+            ...rows,
+        ),
+        {
+            width: 520,
+            height: 330,
+            fonts: [{ name: 'Geist', data: fontData, weight: 400, style: 'normal' }],
+        },
+    );
+
+    return Buffer.from(await image.arrayBuffer());
+}
+
 function addSummaryTable(
     worksheet: ExcelJS.Worksheet,
     startColumn: number,
@@ -173,6 +280,7 @@ export async function addSummaryWorksheet(
     districtRows: SummaryRow[],
     chartRows: SummaryRow[],
     totalHc: number,
+    distributionCharts: DistributionChart[] = [],
 ): Promise<void> {
     let sheetName = 'Ringkasan';
     let suffix = 1;
@@ -214,4 +322,14 @@ export async function addSummaryWorksheet(
         tl: { col: 3.15, row: 16 },
         ext: { width: 570, height: 323 },
     });
+
+    const chartsStartRow = Math.max(villageRows.length + 6, districtRows.length + 6, 36);
+    for (let index = 0; index < distributionCharts.length; index++) {
+        const chartBuffer = await createDistributionChart(distributionCharts[index]);
+        const chartImageId = workbook.addImage({ base64: chartBuffer.toString('base64'), extension: 'png' });
+        worksheet.addImage(chartImageId, {
+            tl: { col: index * 4, row: chartsStartRow },
+            ext: { width: 390, height: 248 },
+        });
+    }
 }
