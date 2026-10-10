@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import * as xlsx from 'xlsx';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
@@ -179,36 +178,27 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         link.click();
     };
 
-    const handleExportReport = () => {
-        const summaryRows = [
-            ['Judul Laporan', 'Dashboard Domisili Tenaga Kerja'],
-            ['Tanggal', new Date(initialData.lastUpdated).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
-            ['Total Headcount', initialData.totalHc.toLocaleString('id-ID')],
-            ['Perubahan HC', `${initialData.diffHc.toLocaleString('id-ID')} (${Math.abs(initialData.diffPercent).toFixed(1)}%)`],
-            ['Kecamatan Dominan', initialData.dominantDistrict.name],
-            ['Persentase Kecamatan Dominan', `${initialData.dominantDistrict.percentage.toFixed(2)}%`],
-            ['Total Desa', initialData.totalVillages.toString()],
-            [],
-            ['Top Desa', 'Jumlah TK', 'Persentase'],
-            ...[...initialData.villageData].sort((a, b) => b.jumlah_tk - a.jumlah_tk).slice(0, 10).map((v) => [v.nama_desa, v.jumlah_tk.toLocaleString('id-ID'), `${((v.jumlah_tk / initialData.totalHc) * 100).toFixed(2)}%`]),
-            [],
-            ['Distribusi Kecamatan', 'Jumlah TK', 'Persentase'],
-            ...initialData.districtData.map(d => [d.name, d.value.toLocaleString('id-ID'), `${((d.value / initialData.totalHc) * 100).toFixed(2)}%`]),
-        ];
+    const handleExportReport = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (currentUploadId) params.set('upload_id', currentUploadId);
+            const response = await fetch(`/api/export-summary?${params.toString()}`);
+            if (!response.ok) {
+                const result = await response.json().catch(() => null);
+                throw new Error(result?.error || 'Gagal mengunduh ringkasan.');
+            }
 
-        const workbook = xlsx.utils.book_new();
-        const summarySheet = xlsx.utils.aoa_to_sheet(summaryRows);
-        summarySheet['!cols'] = [
-            { wch: 26 }, { wch: 18 }, { wch: 14 },
-        ];
-        xlsx.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan');
-
-        const exportBuffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([exportBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Laporan_Domisili_TK_${new Date().toISOString().split('T')[0]}.xlsx`;
-        link.click();
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Ringkasan_Desa_Kecamatan_${new Date(initialData.lastUpdated).toISOString().slice(0, 10)}.xlsx`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error) {
+            console.error('Export summary error:', error);
+            alert(error instanceof Error ? error.message : 'Gagal mengunduh ringkasan.');
+        }
     };
 
     const uniqueDistricts = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kecamatan))).filter(Boolean).sort()];
