@@ -466,7 +466,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                 <div className="card" style={{ padding: '22px 24px' }}>
                     <div style={{ marginBottom: 20 }}>
                         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Top 10 Desa — Jumlah TK Terbanyak</h3>
-                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Tidak termasuk kelompok &quot;Desa Lainnya&quot;</p>
+                        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#94a3b8' }}>Diurutkan berdasarkan jumlah tenaga kerja</p>
                     </div>
                     <div style={{ height: 210 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -953,6 +953,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             <tr>
                                 <th style={{ width: 48 }}>No</th>
                                 <th>Nama Desa</th>
+                                <th className="col-hide-xs">Kabupaten / City</th>
                                 <th className="col-hide-xs">Kecamatan / District</th>
                                 <th style={{ textAlign: 'right' }}>Jumlah TK</th>
                                 <th style={{ textAlign: 'right' }} className="col-hide-xs">Laki-laki</th>
@@ -986,6 +987,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                                     </Link>
                                                 </div>
                                             </td>
+                                            <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kabupaten || 'Tidak Diketahui'}</td>
                                             <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kecamatan || '—'}</td>
                                             <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.jumlah_tk.toLocaleString('id-ID')}</td>
                                             <td className="col-hide-xs" style={{ textAlign: 'right' }}>
@@ -1021,7 +1023,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
+                                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
                                         Tidak ada data yang cocok.
                                     </td>
                                 </tr>

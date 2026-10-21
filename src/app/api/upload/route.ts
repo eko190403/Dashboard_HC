@@ -3,7 +3,7 @@ import * as xlsx from 'xlsx';
 import { getEmployeeMasterLookups } from '@/lib/employee-master';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { authorizeWriteRequest } from '@/lib/auth-server';
-import { normalizeDesa, normalizeGender } from '@/lib/normalizer';
+import { normalizeDesa, normalizeGender, normalizeKabupaten } from '@/lib/normalizer';
 import { deduplicateRows } from '@/lib/duplicate-check';
 import { filterValidUploadRows, getMissingColumns, REQUIRED_UPLOAD_COLUMNS } from '@/lib/upload-validation';
 
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
         for (const row of deduplicatedData) {
             const rawAddr = row['Street and House Number'];
             const district = String(row['District'] || '');
-            const kabupaten = String(row['City'] || '').trim() || 'Tidak Diketahui';
+            const kabupaten = normalizeKabupaten(row['City']);
             const status = String(row['Employment Status'] || '');
             const gender = normalizeGender(String(row['Gender Key'] ?? ''));
 
@@ -289,24 +289,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No valid data found in Excel file.' }, { status: 400 });
         }
 
-        // Apply threshold < 20 for "Desa Lainnya (< 20 TK)"
-        const finalCounts: Record<string, { count: number; desa: string; district: string; kabupaten: string; isGrouped: boolean; laki: number; perempuan: number }> = {};
-        
-        for (const [villageKey, data] of Object.entries(villageCounts)) {
-            if (data.count < 20 || data.desa.startsWith('Format') || data.desa.startsWith('Lokasi')) {
-                const groupedName = 'Desa Lainnya (< 20 TK)';
-                const groupedKey = `${groupedName}\u0000${data.kabupaten}`;
-                if (!finalCounts[groupedKey]) {
-                    finalCounts[groupedKey] = { count: 0, desa: groupedName, district: 'Various', kabupaten: data.kabupaten, isGrouped: true, laki: 0, perempuan: 0 };
-                }
-                finalCounts[groupedKey].count += data.count;
-                finalCounts[groupedKey].laki += data.laki;
-                finalCounts[groupedKey].perempuan += data.perempuan;
-            } else {
-                finalCounts[villageKey] = { count: data.count, desa: data.desa, district: data.district, kabupaten: data.kabupaten, isGrouped: false, laki: data.laki, perempuan: data.perempuan };
-            }
-        }
-
         const uploadSummary = {
             duplicatesSkipped,
             invalidRows,
@@ -316,7 +298,7 @@ export async function POST(request: NextRequest) {
         };
 
         // Prepare data for summary_domisili
-        const summaryData = Object.values(finalCounts).map(data => {
+        const summaryData = Object.values(villageCounts).map(data => {
             const persentase = ((data.count / totalHc) * 100).toFixed(2);
             return {
                 nama_desa: data.desa,
@@ -324,7 +306,7 @@ export async function POST(request: NextRequest) {
                 kabupaten: data.kabupaten,
                 jumlah_tk: data.count,
                 persentase: parseFloat(persentase),
-                is_grouped: data.isGrouped,
+                is_grouped: false,
                 jumlah_laki: data.laki,
                 jumlah_perempuan: data.perempuan,
             };

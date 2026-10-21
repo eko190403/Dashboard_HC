@@ -41,35 +41,13 @@ function buildSummaryRows(employees: EmployeeRecord[], totalHc: number) {
         districtCounts.set(district, (districtCounts.get(district) || 0) + 1);
     }
 
-    const namedVillages: SummaryRow[] = [];
-    let otherVillageCount = 0;
-    let limitedAddressCount = 0;
-    for (const [name, count] of villageCounts) {
-        if (name === 'Lokasi Perusahaan / Mess' || name === 'Tidak Diketahui' || name.startsWith('Format')) {
-            limitedAddressCount += count;
-        } else if (count < 20) {
-            otherVillageCount += count;
-        } else {
-            namedVillages.push({ name, count, percentage: count / totalHc * 100 });
-        }
-    }
-
-    namedVillages.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
-    const villageRows = [...namedVillages];
-    if (otherVillageCount > 0) {
-        villageRows.push({
-            name: 'Desa Lainnya (< 20 TK)',
-            count: otherVillageCount,
-            percentage: otherVillageCount / totalHc * 100,
-        });
-    }
-    if (limitedAddressCount > 0) {
-        villageRows.push({
-            name: 'Format Alamat Terbatas / Lainnya',
-            count: limitedAddressCount,
-            percentage: limitedAddressCount / totalHc * 100,
-        });
-    }
+    const villageRows = [...villageCounts.entries()]
+        .map(([name, count]) => ({
+            name,
+            count,
+            percentage: count / totalHc * 100,
+        }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
 
     const sortedDistricts = [...districtCounts.entries()]
         .map(([name, count]) => ({ name, count }))
@@ -87,7 +65,7 @@ function buildSummaryRows(employees: EmployeeRecord[], totalHc: number) {
         });
     }
 
-    return { villageRows, districtRows, chartRows: namedVillages.slice(0, 10) };
+    return { villageRows, districtRows, chartRows: villageRows.slice(0, 10) };
 }
 
 function filterEmployeesByVillage(

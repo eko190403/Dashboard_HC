@@ -31,7 +31,7 @@ Row-level security is enabled on `employee_master` without public policies. The 
 
 The migrations also revoke direct client write privileges on upload and mandor tables and deny client access to the `excel-backups` storage bucket. Upload, mandor import, and rollback routes use the server-only service-role client; upload replacement runs in a single PostgreSQL transaction through `replace_monthly_upload`. Browser reads continue using the anon key.
 
-The dashboard's Kabupaten filter reads the `City` column from each uploaded Excel row. Apply `20261021000001_add_kabupaten_filter.sql` to add and save this field in Supabase before uploading data for the filter. Existing uploads have no saved Kabupaten value; re-upload their source workbook after applying the migration to populate it.
+The dashboard's Kabupaten filter reads the `City` column from each uploaded Excel row. Apply `20261021000001_add_kabupaten_filter.sql` to add and save this field in Supabase before uploading data for the filter. Apply `20261021000002_normalize_kabupaten_values.sql` to standardize saved values, including aliases and typos found in the HC workbook; new uploads also normalize whitespace and capitalization. Apply `20261021000003_expand_grouped_villages.sql` to restore individual village summaries for existing uploads that were previously grouped. New uploads record every village separately regardless of headcount.
 
 ## Downloading saved upload data with its summary
 

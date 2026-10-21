@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { supabase } from '@/lib/supabase';
-import { addSummaryWorksheet, type SummaryRow } from '@/lib/summary-workbook';
+import { addSummaryWorksheet } from '@/lib/summary-workbook';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,45 +69,14 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Data karyawan tidak ditemukan untuk upload ini.' }, { status: 404 });
         }
 
-        const namedVillages: SummaryRow[] = [];
-        let otherVillageCount = 0;
-        let limitedAddressCount = 0;
-        for (const [name, count] of villageCounts) {
-            if (
-                name === 'Lokasi Perusahaan / Mess'
-                || name === 'Tidak Diketahui'
-                || name.startsWith('Format')
-            ) {
-                limitedAddressCount += count;
-            } else if (count < 20) {
-                otherVillageCount += count;
-            } else {
-                namedVillages.push({
-                    name,
-                    count,
-                    percentage: count / totalHc * 100,
-                });
-            }
-        }
-
-        namedVillages.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
-        const villageRows = [...namedVillages];
-        if (otherVillageCount > 0) {
-            villageRows.push({
-                name: 'Desa Lainnya (< 20 TK)',
-                count: otherVillageCount,
-                percentage: otherVillageCount / totalHc * 100,
-            });
-        }
-        if (limitedAddressCount > 0) {
-            villageRows.push({
-                name: 'Format Alamat Terbatas / Lainnya',
-                count: limitedAddressCount,
-                percentage: limitedAddressCount / totalHc * 100,
-            });
-        }
-        const chartRows = namedVillages
-            .slice(0, 10);
+        const villageRows = [...villageCounts.entries()]
+            .map(([name, count]) => ({
+                name,
+                count,
+                percentage: count / totalHc * 100,
+            }))
+            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'id'));
+        const chartRows = villageRows.slice(0, 10);
 
         const sortedDistricts = [...districtCounts.entries()]
             .map(([name, count]) => ({ name, count }))

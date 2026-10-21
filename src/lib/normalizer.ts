@@ -205,6 +205,28 @@ export function normalizeGender(value: unknown): 'L' | 'P' | '' {
     return '';
 }
 
+export function normalizeKabupaten(value: unknown): string {
+    const normalized = String(value || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/[.,;:]+$/, '')
+        .toLocaleLowerCase('id-ID');
+    if (!normalized) return 'Tidak Diketahui';
+
+    const aliases: Record<string, string> = {
+        'bandar lampung': 'Kota Bandar Lampung',
+        'kota bandar lampung': 'Kota Bandar Lampung',
+        'bandar lampung kota': 'Kota Bandar Lampung',
+        'bandar lampung kota bandar lampung': 'Kota Bandar Lampung',
+        'metro': 'Kota Metro',
+        'kota metro': 'Kota Metro',
+        'lampung tengahl': 'Lampung Tengah',
+        'tulan bawang barat': 'Tulang Bawang Barat',
+    };
+
+    return aliases[normalized] || toTitleCase(normalized);
+}
+
 function toTitleCase(str: string): string {
     return str.replace(
         /\w\S*/g,
