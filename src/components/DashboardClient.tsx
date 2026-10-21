@@ -74,6 +74,8 @@ interface AgeDemographicsResponse {
     unknown?: number;
 }
 
+const VILLAGE_PAGE_SIZE = 50;
+
 const DISTRICT_COLORS = [
     '#1e5fd4', '#0ea573', '#f59e0b', '#7c3aed',
     '#e11d48', '#0891b2', '#ea580c', '#65a30d',
@@ -110,6 +112,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
     const [filterKabupaten, setFilterKabupaten] = useState('All');
+    const [villagePage, setVillagePage] = useState(1);
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
     const [showOtherVillages, setShowOtherVillages] = useState(false);
     const [ageData, setAgeData] = useState<AgeSummary[]>([]);
@@ -173,6 +176,12 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             })
             .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
     }, [initialData, searchQuery, filterDistrict, filterKabupaten]);
+    const totalVillagePages = Math.max(1, Math.ceil(filteredVillages.length / VILLAGE_PAGE_SIZE));
+    const currentVillagePage = Math.min(villagePage, totalVillagePages);
+    const pagedVillages = useMemo(() => {
+        const start = (currentVillagePage - 1) * VILLAGE_PAGE_SIZE;
+        return filteredVillages.slice(start, start + VILLAGE_PAGE_SIZE);
+    }, [filteredVillages, currentVillagePage]);
 
     const genderData = useMemo(() => {
         const villageData = initialData?.villageData ?? [];
@@ -880,7 +889,10 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                 type="text"
                                 placeholder="Cari desa..."
                                 value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
+                                onChange={e => {
+                                    setSearchQuery(e.target.value);
+                                    setVillagePage(1);
+                                }}
                                 className="search-input"
                                 style={{ paddingLeft: 32 }}
                             />
@@ -888,7 +900,10 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         {/* Filter */}
                         <select
                             value={filterKabupaten}
-                            onChange={e => setFilterKabupaten(e.target.value)}
+                            onChange={e => {
+                                setFilterKabupaten(e.target.value);
+                                setVillagePage(1);
+                            }}
                             className="form-select"
                             style={{ minWidth: 170 }}
                         >
@@ -900,7 +915,10 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         </select>
                         <select
                             value={filterDistrict}
-                            onChange={e => setFilterDistrict(e.target.value)}
+                            onChange={e => {
+                                setFilterDistrict(e.target.value);
+                                setVillagePage(1);
+                            }}
                             className="form-select"
                             style={{ minWidth: 170 }}
                         >
@@ -916,6 +934,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                     setFilterDistrict('All');
                                     setFilterKabupaten('All');
                                     setFilterGenderVillage('All');
+                                    setVillagePage(1);
                                 }}
                                 title="Reset semua filter"
                             >
@@ -962,8 +981,8 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredVillages.length > 0 ? (
-                                filteredVillages.map((row, i) => {
+                            {pagedVillages.length > 0 ? (
+                                pagedVillages.map((row, i) => {
                                     const isGrouped = row.is_grouped;
                                     const groupedParams = new URLSearchParams();
                                     if (currentUploadId) groupedParams.set('upload_id', String(currentUploadId));
@@ -974,7 +993,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
 
                                     return (
                                         <tr key={row.id}>
-                                            <td style={{ color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
+                                            <td style={{ color: '#94a3b8', fontSize: 12 }}>{(currentVillagePage - 1) * VILLAGE_PAGE_SIZE + i + 1}</td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                     {isGrouped && <span className="badge badge-blue">Grup</span>}
@@ -1040,11 +1059,34 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
                         fontSize: 12, color: '#94a3b8',
                     }}>
-                        <span>Menampilkan <b style={{ color: '#1a2b4a' }}>{filteredVillages.length}</b> baris</span>
+                        <span>
+                            Menampilkan <b style={{ color: '#1a2b4a' }}>
+                                {(currentVillagePage - 1) * VILLAGE_PAGE_SIZE + 1}–{Math.min(currentVillagePage * VILLAGE_PAGE_SIZE, filteredVillages.length)}
+                            </b> dari <b style={{ color: '#1a2b4a' }}>{filteredVillages.length}</b> desa
+                        </span>
                         <div className="table-footer-stats" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                             <span>Total TK: <b style={{ color: '#1a2b4a' }}>{filteredVillages.reduce((s, v) => s + v.jumlah_tk, 0).toLocaleString('id-ID')}</b></span>
                             <span>♂ Laki-laki: <b style={{ color: '#1e5fd4' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_laki ?? 0), 0).toLocaleString('id-ID')}</b></span>
                             <span>♀ Perempuan: <b style={{ color: '#e11d48' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_perempuan ?? 0), 0).toLocaleString('id-ID')}</b></span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                disabled={currentVillagePage === 1}
+                                onClick={() => setVillagePage(currentVillagePage - 1)}
+                            >
+                                Sebelumnya
+                            </button>
+                            <span style={{ whiteSpace: 'nowrap' }}>Halaman {currentVillagePage} dari {totalVillagePages}</span>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                disabled={currentVillagePage === totalVillagePages}
+                                onClick={() => setVillagePage(currentVillagePage + 1)}
+                            >
+                                Selanjutnya
+                            </button>
                         </div>
                     </div>
                 )}
