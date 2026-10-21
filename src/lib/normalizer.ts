@@ -227,6 +227,37 @@ export function normalizeKabupaten(value: unknown): string {
     return aliases[normalized] || toTitleCase(normalized);
 }
 
+export function normalizeKecamatan(value: unknown): string {
+    const normalized = String(value ?? '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/[.,;:]+$/, '')
+        .toLocaleLowerCase('id-ID');
+    if (!normalized) return '';
+
+    const aliases: Record<string, string> = {
+        'anat tuha': 'Anak Tuha',
+        'blambang pagar': 'Blambangan Pagar',
+        'bumiratu nuban': 'Bumi Ratu Nuban',
+        'cileunsi': 'Cileungsi',
+        'gedung tataan': 'Gedong Tataan',
+        'kota bumi': 'Kotabumi',
+        kotabumi: 'Kotabumi',
+        'suko harjo': 'Sukoharjo',
+        'terbanggi besarl': 'Terbanggi Besar',
+        'terusan nyunyai': 'Terusan Nunyai',
+        'tulang bawang udki': 'Tulang Bawang Udik',
+        'tulang bwang tengah': 'Tulang Bawang Tengah',
+        'tumi jajar': 'Tumijajar',
+        tumijajar: 'Tumijajar',
+        'way pangubuan': 'Way Pengubuan',
+        'way pengubuhan': 'Way Pengubuan',
+        'way ppengubuan': 'Way Pengubuan',
+    };
+
+    return aliases[normalized] || toTitleCase(normalized);
+}
+
 function toTitleCase(str: string): string {
     return str.replace(
         /\w\S*/g,

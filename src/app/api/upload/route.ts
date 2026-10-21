@@ -3,7 +3,7 @@ import * as xlsx from 'xlsx';
 import { getEmployeeMasterLookups } from '@/lib/employee-master';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { authorizeWriteRequest } from '@/lib/auth-server';
-import { normalizeDesa, normalizeGender, normalizeKabupaten } from '@/lib/normalizer';
+import { normalizeDesa, normalizeGender, normalizeKabupaten, normalizeKecamatan } from '@/lib/normalizer';
 import { deduplicateRows } from '@/lib/duplicate-check';
 import { filterValidUploadRows, getMissingColumns, REQUIRED_UPLOAD_COLUMNS } from '@/lib/upload-validation';
 
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
 
         for (const row of deduplicatedData) {
             const rawAddr = row['Street and House Number'];
-            const district = String(row['District'] || '');
+            const district = normalizeKecamatan(row['District']);
             const kabupaten = normalizeKabupaten(row['City']);
             const status = String(row['Employment Status'] || '');
             const gender = normalizeGender(String(row['Gender Key'] ?? ''));
