@@ -45,6 +45,18 @@ export const ALIAS_MAP: Record<string, string> = {
     'gn agung': 'Gunung Agung',
     'gn. agung': 'Gunung Agung',
 
+    // Gunung Jadi
+    'gunung jadi': 'Gunung Jadi',
+    'gn jadi': 'Gunung Jadi',
+    'gn. jadi': 'Gunung Jadi',
+
+    // Gunung Batin Ilir
+    'gunung batin ilir': 'Gunung Batin Ilir',
+
+    // Bandar Agung
+    'bandar agung': 'Bandar Agung',
+    'bandaragung': 'Bandar Agung',
+
     // Bumi Jaya
     'bumi jaya': 'Bumi Jaya',
     'bumijaya': 'Bumi Jaya',
@@ -66,6 +78,15 @@ export const ALIAS_MAP: Record<string, string> = {
 
     // Sukoharjo
     'sukoharjo': 'Sukoharjo',
+    'suko harjo': 'Sukoharjo',
+
+    // Sidomukti
+    'sido mukti': 'Sidomukti',
+    'sidomukti': 'Sidomukti',
+
+    // Purwoadi
+    'purwo adi': 'Purwoadi',
+    'purwoadi': 'Purwoadi',
 
     // Lempuyang Bandar
     'lempuyang bandar': 'Lempuyang Bandar',
@@ -147,54 +168,100 @@ export const ALIAS_MAP: Record<string, string> = {
 
 const ALIAS_KEYS = Object.keys(ALIAS_MAP).sort((a, b) => b.length - a.length);
 
-const SEPARATOR_PATTERN = /\b(?:rt\/?rw|rt|rw|dusun|dsn|dsn\.|jl\.|jalan|kp\.|kampung|kel\.|kec\.|kab\.|desa)\b/i;
+const SEPARATOR_PATTERN = /\b(?:rt\/?rw|rt|rw|dusun|dsn\.?|lingkungan|lingk\.?|jl\.?|jln\.?|jalan|kp\.?|kampung|kel\.?|kec\.?|kab\.?|desa)\b/i;
+const LEADING_STREET_PATTERN = /^\s*(?:(?:jl|jln)\.?\s*|jalan\b)[^,]*(?=,|\b(?:RT|RW|Dusun|Dsn|Kel|Desa|Kampung)\b|$)/i;
+const ADDRESS_LABEL_PATTERN = /^(?:(?:desa|kelurahan|kel\.?|kampung|kp\.?|dusun|dsn\.?|lingkungan|lingk\.?)\s*[:.,-]?\s*)+/i;
+const VILLAGE_SUFFIX_PATTERN = /\b(?:rt\/?rw|rt|rw)\b\s*[:.]?/i;
 
-const COMPANY_KEYWORDS = ['perum op', 'perum kopkar', 'pt ggp', 'pg 2', 'pg2', 'mess', 'kost', 'komp.', 'asrama', 'perumahan pt', 'perumahan ggp', 'kopkar'];
+const COMPANY_KEYWORDS = ['perum op', 'perum kopkar', 'perum ggp', 'perum vi pt gmp', 'pt ggp', 'pg 2', 'pg2', 'mess', 'kost', 'komp.', 'asrama', 'perumahan pt', 'perumahan ggp', 'kopkar'];
+
+function normalizeAliasText(value: string): string {
+    return value
+        .toLocaleLowerCase('id-ID')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function getVillageCandidate(value: string): string {
+    const candidate = value
+        .replace(/^[\s"'`]+|[\s"'`]+$/g, '')
+        .replace(/^(?:[ivxlcdm]+)(?=$|[.\s])/i, '')
+        .replace(/^[\d\s/.,;:"'`-]+/, '')
+        .replace(ADDRESS_LABEL_PATTERN, '')
+        .replace(/^(?:[ivxlcdm]+)(?=$|[.\s])/i, '')
+        .replace(/^[\d\s/.,;:"'`-]+/, '')
+        .replace(/\b(?:rt\/?rw|rt|rw|dusun|dsn\.?|lingkungan|lingk\.?)\b.*$/i, '')
+        .replace(/[,.;:"'`]+$/g, '')
+        .trim()
+        .replace(/\s+/g, ' ');
+
+    if (!candidate || /^[ivxlcdm]+$/i.test(candidate) || !/[a-zA-Z]{3}/.test(candidate)) {
+        return '';
+    }
+
+    return candidate;
+}
 
 export function normalizeDesa(rawAddr: string, district: string): string {
-    rawAddr = (rawAddr || '').toString().trim();
+    rawAddr = (rawAddr || '').toString().replace(/^[\s"'`]+|[\s"'`]+$/g, '').trim();
     district = (district || '').toString().trim();
 
     if (!rawAddr || ['-', '.', '', '0'].includes(rawAddr)) {
         return district ? toTitleCase(district) : 'Tidak Diketahui';
     }
 
-    const addrLower = rawAddr.toLowerCase();
+    const normalizedAddress = normalizeAliasText(rawAddr);
 
     // 1. Check company location
     for (const kw of COMPANY_KEYWORDS) {
-        if (addrLower.includes(kw)) {
+        if (normalizedAddress.includes(normalizeAliasText(kw))) {
             return 'Lokasi Perusahaan / Mess';
         }
     }
 
     // 2. Direct alias mapping
     for (const key of ALIAS_KEYS) {
-        if (addrLower.includes(key)) {
+        if (` ${normalizedAddress} `.includes(` ${normalizeAliasText(key)} `)) {
             return ALIAS_MAP[key];
         }
     }
 
-    // 3. Regex parsing
-    const parts = rawAddr.split(SEPARATOR_PATTERN);
-    const candidates: string[] = [];
-    
-    for (let part of parts) {
-        part = part.trim().replace(/^,+|,+$/g, '').trim();
-        // Remove numbers/symbols at start
-        part = part.replace(/^[\d\s/.,;:-]+/, '').trim();
-        if (part.length >= 3 && /[a-zA-Z]{3}/.test(part)) {
-            candidates.push(part);
+    // Street addresses sometimes put the village after the RT/RW number.
+    const addressToParse = rawAddr.replace(LEADING_STREET_PATTERN, '');
+    const suffixStart = addressToParse.search(VILLAGE_SUFFIX_PATTERN);
+    if (suffixStart !== -1) {
+        const suffix = addressToParse.slice(suffixStart).replace(VILLAGE_SUFFIX_PATTERN, '');
+        const suffixParts = suffix.split(/[,;]/).reverse();
+        for (const part of suffixParts) {
+            const village = getVillageCandidate(part);
+            if (village) return toTitleCase(village);
         }
     }
 
+    if (/^\s*(?:lingkungan|lingk\.?|dusun|dsn\.?)/i.test(addressToParse)) {
+        for (const part of addressToParse.split(/[,;]/).reverse()) {
+            const village = getVillageCandidate(part);
+            if (village) return toTitleCase(village);
+        }
+    }
+
+    // 3. Regex parsing
+    const parts = addressToParse.split(SEPARATOR_PATTERN);
+    const candidates: string[] = [];
+    
+    for (const part of parts) {
+        const candidate = getVillageCandidate(part.trim().replace(/^[,.;:]+|[,.;:]+$/g, ''));
+        if (candidate) candidates.push(candidate);
+    }
+
     if (candidates.length > 0) {
-        let best = candidates[0].replace(/^,+|,+$/g, '').trim();
-        best = toTitleCase(best);
+        const best = toTitleCase(candidates[0]);
         
         // Check alias again on best match
+        const normalizedBest = normalizeAliasText(best);
         for (const key of ALIAS_KEYS) {
-            if (best.toLowerCase().includes(key)) {
+            if (` ${normalizedBest} `.includes(` ${normalizeAliasText(key)} `)) {
                 return ALIAS_MAP[key];
             }
         }
