@@ -16,9 +16,11 @@ interface GroupedEmployee {
 
 export default function GroupedVillagePageClient({
     uploadId,
+    kabupaten,
     totalCount: initialTotalCount,
 }: {
     uploadId: string | null;
+    kabupaten: string | null;
     totalCount: number;
 }) {
     const [employees, setEmployees] = useState<GroupedEmployee[]>([]);
@@ -42,6 +44,7 @@ export default function GroupedVillagePageClient({
                     page: String(page),
                     search,
                 });
+                if (kabupaten) params.set('kabupaten', kabupaten);
                 const response = await fetch(`/api/grouped-village-employees?${params}`, {
                     signal: controller.signal,
                 });
@@ -64,7 +67,7 @@ export default function GroupedVillagePageClient({
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [uploadId, page, search]);
+    }, [uploadId, kabupaten, page, search]);
 
     const dashboardHref = uploadId ? `/?upload_id=${encodeURIComponent(uploadId)}` : '/';
 
@@ -84,6 +87,7 @@ export default function GroupedVillagePageClient({
                     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a2b4a' }}>Desa Lainnya (&lt;20 TK)</h1>
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5a7184' }}>
                         {totalCount.toLocaleString('id-ID')} karyawan dari desa-desa dengan jumlah di bawah 20 TK
+                        {kabupaten ? ` di Kabupaten ${kabupaten}` : ''}
                     </p>
                 </div>
             </header>

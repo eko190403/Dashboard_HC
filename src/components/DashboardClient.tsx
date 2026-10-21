@@ -31,6 +31,7 @@ interface VillageSummary {
     id?: string | number;
     nama_desa: string;
     kecamatan: string;
+    kabupaten?: string | null;
     jumlah_tk: number;
     persentase: number;
     is_grouped?: boolean;
@@ -108,6 +109,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     const [justUpdated, setJustUpdated] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDistrict, setFilterDistrict] = useState('All');
+    const [filterKabupaten, setFilterKabupaten] = useState('All');
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
     const [showOtherVillages, setShowOtherVillages] = useState(false);
     const [ageData, setAgeData] = useState<AgeSummary[]>([]);
@@ -165,10 +167,12 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             .filter(v => {
                 const matchSearch = v.nama_desa.toLowerCase().includes(searchQuery.toLowerCase());
                 const matchDistrict = filterDistrict === 'All' || v.kecamatan === filterDistrict;
-                return matchSearch && matchDistrict;
+                const matchKabupaten = filterKabupaten === 'All'
+                    || (v.kabupaten || 'Tidak Diketahui') === filterKabupaten;
+                return matchSearch && matchDistrict && matchKabupaten;
             })
             .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
-    }, [initialData, searchQuery, filterDistrict]);
+    }, [initialData, searchQuery, filterDistrict, filterKabupaten]);
 
     const genderData = useMemo(() => {
         const villageData = initialData?.villageData ?? [];
@@ -214,10 +218,10 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     }
 
     const handleExportCSV = () => {
-        const headers = ['No', 'Nama Desa', 'Kecamatan', 'Jumlah TK', 'Persentase (%)'];
+        const headers = ['No', 'Nama Desa', 'Kecamatan', 'Kabupaten', 'Jumlah TK', 'Persentase (%)'];
         const csvContent = [
             headers.join(','),
-            ...filteredVillages.map((v, i) => `${i + 1},"${v.nama_desa}","${v.kecamatan}",${v.jumlah_tk},${v.persentase}`)
+            ...filteredVillages.map((v, i) => `${i + 1},"${v.nama_desa}","${v.kecamatan}","${v.kabupaten || 'Tidak Diketahui'}",${v.jumlah_tk},${v.persentase}`)
         ].join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -278,6 +282,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     };
 
     const uniqueDistricts = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kecamatan))).filter(Boolean).sort()];
+    const uniqueKabupaten = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kabupaten || 'Tidak Diketahui'))).sort()];
     const uniqueVillages = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.nama_desa))).filter(Boolean).sort()];
 
     const topDesaData = initialData.villageData.filter(v => !v.is_grouped).slice(0, 10);
@@ -882,6 +887,18 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         </div>
                         {/* Filter */}
                         <select
+                            value={filterKabupaten}
+                            onChange={e => setFilterKabupaten(e.target.value)}
+                            className="form-select"
+                            style={{ minWidth: 170 }}
+                        >
+                            {uniqueKabupaten.map(kabupaten => (
+                                <option key={kabupaten} value={kabupaten}>
+                                    {kabupaten === 'All' ? 'Semua Kabupaten' : kabupaten}
+                                </option>
+                            ))}
+                        </select>
+                        <select
                             value={filterDistrict}
                             onChange={e => setFilterDistrict(e.target.value)}
                             className="form-select"
@@ -891,12 +908,13 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                                 <option key={d} value={d}>{d === 'All' ? 'Semua Kecamatan' : d}</option>
                             ))}
                         </select>
-                        {(searchQuery || filterDistrict !== 'All' || filterGenderVillage !== 'All') && (
+                        {(searchQuery || filterDistrict !== 'All' || filterKabupaten !== 'All' || filterGenderVillage !== 'All') && (
                             <button
                                 className="btn-secondary"
                                 onClick={() => {
                                     setSearchQuery('');
                                     setFilterDistrict('All');
+                                    setFilterKabupaten('All');
                                     setFilterGenderVillage('All');
                                 }}
                                 title="Reset semua filter"
@@ -946,8 +964,11 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                             {filteredVillages.length > 0 ? (
                                 filteredVillages.map((row, i) => {
                                     const isGrouped = row.is_grouped;
+                                    const groupedParams = new URLSearchParams();
+                                    if (currentUploadId) groupedParams.set('upload_id', String(currentUploadId));
+                                    if (row.kabupaten) groupedParams.set('kabupaten', row.kabupaten);
                                     const villageHref = isGrouped
-                                        ? `/desa-lainnya?upload_id=${encodeURIComponent(String(currentUploadId || ''))}`
+                                        ? `/desa-lainnya?${groupedParams.toString()}`
                                         : `/desa/${encodeURIComponent(row.nama_desa)}`;
 
                                     return (

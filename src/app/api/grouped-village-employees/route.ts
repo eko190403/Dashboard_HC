@@ -12,6 +12,7 @@ interface GroupedVillageEmployee {
     employee_name: string | null;
     nama_desa: string | null;
     kecamatan: string | null;
+    kabupaten: string | null;
     gender: string | null;
     bagian: string | null;
     nama_mandor: string | null;
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const uploadId = searchParams.get('upload_id');
+        const kabupatenFilter = searchParams.get('kabupaten');
         const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
         const search = (searchParams.get('search') || '').trim().toLocaleLowerCase('id-ID');
 
@@ -28,12 +30,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Upload data tidak ditemukan.' }, { status: 400 });
         }
 
-        const villageCounts = new Map<string, number>();
+        const villageCounts = new Map<string, { village: string; district: string; kabupaten: string; count: number }>();
         let offset = 0;
         while (true) {
             const { data, error } = await supabase
                 .from('employee_domisili')
-                .select('nama_desa')
+                .select('nama_desa,kecamatan,kabupaten')
                 .eq('upload_id', uploadId)
                 .range(offset, offset + READ_BATCH_SIZE - 1);
             if (error) throw error;
@@ -41,17 +43,31 @@ export async function GET(request: NextRequest) {
 
             for (const employee of data) {
                 const village = String(employee.nama_desa || '').trim();
-                if (village) villageCounts.set(village, (villageCounts.get(village) || 0) + 1);
+                const district = String(employee.kecamatan || '');
+                const kabupaten = String(employee.kabupaten || 'Tidak Diketahui');
+                if (!village || (kabupatenFilter && kabupaten !== kabupatenFilter)) continue;
+
+                const key = JSON.stringify([kabupaten, district, village]);
+                const existing = villageCounts.get(key);
+                villageCounts.set(key, {
+                    village,
+                    district,
+                    kabupaten,
+                    count: (existing?.count || 0) + 1,
+                });
             }
 
             if (data.length < READ_BATCH_SIZE) break;
             offset += READ_BATCH_SIZE;
         }
 
-        const groupedVillageNames = [...villageCounts]
-            .filter(([village, count]) => count < 20 || village.startsWith('Format') || village.startsWith('Lokasi'))
-            .map(([village]) => village);
-        if (!groupedVillageNames.length) {
+        const groupedVillageKeys = new Set([...villageCounts]
+            .filter(([, village]) => village.count < 20 || village.village.startsWith('Format') || village.village.startsWith('Lokasi'))
+            .map(([key]) => key));
+        const groupedVillageNames = [...new Set([...villageCounts]
+            .filter(([key]) => groupedVillageKeys.has(key))
+            .map(([, village]) => village.village))];
+        if (!groupedVillageKeys.size) {
             return NextResponse.json({ data: [], page, totalPages: 1, totalCount: 0, pageSize: PAGE_SIZE });
         }
 
@@ -59,11 +75,15 @@ export async function GET(request: NextRequest) {
         for (let index = 0; index < groupedVillageNames.length; index += QUERY_CHUNK_SIZE) {
             const { data, error } = await supabase
                 .from('employee_domisili')
-                .select('kit_tk, employee_name, nama_desa, kecamatan, gender, bagian, nama_mandor')
+                .select('kit_tk, employee_name, nama_desa, kecamatan, kabupaten, gender, bagian, nama_mandor')
                 .eq('upload_id', uploadId)
                 .in('nama_desa', groupedVillageNames.slice(index, index + QUERY_CHUNK_SIZE));
             if (error) throw error;
-            employees.push(...(data || []));
+            employees.push(...(data || []).filter(employee => groupedVillageKeys.has(JSON.stringify([
+                employee.kabupaten || 'Tidak Diketahui',
+                employee.kecamatan || '',
+                employee.nama_desa || '',
+            ]))));
         }
 
         const filteredEmployees = employees

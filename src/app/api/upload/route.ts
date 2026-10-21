@@ -147,12 +147,13 @@ export async function POST(request: NextRequest) {
         }
 
         let totalHc = 0;
-        const villageCounts: Record<string, { count: number; district: string; laki: number; perempuan: number }> = {};
+        const villageCounts: Record<string, { count: number; desa: string; district: string; kabupaten: string; laki: number; perempuan: number }> = {};
         const employeeRecords: Record<string, unknown>[] = [];
 
         for (const row of deduplicatedData) {
             const rawAddr = row['Street and House Number'];
             const district = String(row['District'] || '');
+            const kabupaten = String(row['City'] || '').trim() || 'Tidak Diketahui';
             const status = String(row['Employment Status'] || '');
             const gender = normalizeGender(String(row['Gender Key'] ?? ''));
 
@@ -166,14 +167,15 @@ export async function POST(request: NextRequest) {
 
             const normalizedDesa = normalizeDesa(String(rawAddr ?? ''), district);
             
-            if (!villageCounts[normalizedDesa]) {
-                villageCounts[normalizedDesa] = { count: 0, district: district, laki: 0, perempuan: 0 };
+            const villageKey = `${kabupaten}\u0000${district}\u0000${normalizedDesa}`;
+            if (!villageCounts[villageKey]) {
+                villageCounts[villageKey] = { count: 0, desa: normalizedDesa, district, kabupaten, laki: 0, perempuan: 0 };
             }
-            villageCounts[normalizedDesa].count += 1;
+            villageCounts[villageKey].count += 1;
             if (gender === 'L') {
-                villageCounts[normalizedDesa].laki += 1;
+                villageCounts[villageKey].laki += 1;
             } else if (gender === 'P') {
-                villageCounts[normalizedDesa].perempuan += 1;
+                villageCounts[villageKey].perempuan += 1;
             }
             totalHc += 1;
 
@@ -266,6 +268,7 @@ export async function POST(request: NextRequest) {
             employeeRecords.push({
                 nama_desa: normalizedDesa,
                 kecamatan: district,
+                kabupaten,
                 employee_name: row['Employee Name'] || row['Name'] || row['Full Name'] || 'Unknown',
                 gender,
                 street_address: rawAddr || '',
@@ -287,19 +290,20 @@ export async function POST(request: NextRequest) {
         }
 
         // Apply threshold < 20 for "Desa Lainnya (< 20 TK)"
-        const finalCounts: Record<string, { count: number; district: string; isGrouped: boolean; laki: number; perempuan: number }> = {};
+        const finalCounts: Record<string, { count: number; desa: string; district: string; kabupaten: string; isGrouped: boolean; laki: number; perempuan: number }> = {};
         
-        for (const [desa, data] of Object.entries(villageCounts)) {
-            if (data.count < 20 || desa.startsWith('Format') || desa.startsWith('Lokasi')) {
+        for (const [villageKey, data] of Object.entries(villageCounts)) {
+            if (data.count < 20 || data.desa.startsWith('Format') || data.desa.startsWith('Lokasi')) {
                 const groupedName = 'Desa Lainnya (< 20 TK)';
-                if (!finalCounts[groupedName]) {
-                    finalCounts[groupedName] = { count: 0, district: 'Various', isGrouped: true, laki: 0, perempuan: 0 };
+                const groupedKey = `${groupedName}\u0000${data.kabupaten}`;
+                if (!finalCounts[groupedKey]) {
+                    finalCounts[groupedKey] = { count: 0, desa: groupedName, district: 'Various', kabupaten: data.kabupaten, isGrouped: true, laki: 0, perempuan: 0 };
                 }
-                finalCounts[groupedName].count += data.count;
-                finalCounts[groupedName].laki += data.laki;
-                finalCounts[groupedName].perempuan += data.perempuan;
+                finalCounts[groupedKey].count += data.count;
+                finalCounts[groupedKey].laki += data.laki;
+                finalCounts[groupedKey].perempuan += data.perempuan;
             } else {
-                finalCounts[desa] = { count: data.count, district: data.district, isGrouped: false, laki: data.laki, perempuan: data.perempuan };
+                finalCounts[villageKey] = { count: data.count, desa: data.desa, district: data.district, kabupaten: data.kabupaten, isGrouped: false, laki: data.laki, perempuan: data.perempuan };
             }
         }
 
@@ -312,11 +316,12 @@ export async function POST(request: NextRequest) {
         };
 
         // Prepare data for summary_domisili
-        const summaryData = Object.entries(finalCounts).map(([desa, data]) => {
+        const summaryData = Object.values(finalCounts).map(data => {
             const persentase = ((data.count / totalHc) * 100).toFixed(2);
             return {
-                nama_desa: desa,
+                nama_desa: data.desa,
                 kecamatan: data.district,
+                kabupaten: data.kabupaten,
                 jumlah_tk: data.count,
                 persentase: parseFloat(persentase),
                 is_grouped: data.isGrouped,
