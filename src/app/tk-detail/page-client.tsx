@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Search, Download, Users, Filter, ChevronDown, ChevronLeft, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { ArrowLeft, Search, Download, Users, Filter, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 const KOMODITI_COLORS: Record<string, string> = {
@@ -36,6 +36,7 @@ export default function DetailTKPage() {
 
     const initialKomoditi = searchParams.get('komoditi') || 'Semua';
     const initialBagian = searchParams.get('bagian') || '';
+    const uploadId = searchParams.get('upload_id') || '';
 
     const [data, setData] = useState<TKDetailRow[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,7 +49,7 @@ export default function DetailTKPage() {
     const [totalCount, setTotalCount] = useState(0);
     const [bagianList, setBagianList] = useState<string[]>([]);
     const [komoditiList, setKomoditiList] = useState<string[]>([]);
-    const queryKey = JSON.stringify([filterKomoditi, filterBagian, filterGender, debouncedSearch, page]);
+    const queryKey = JSON.stringify([uploadId, filterKomoditi, filterBagian, filterGender, debouncedSearch, page]);
     const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null);
     const loading = loadedQueryKey !== queryKey;
 
@@ -57,7 +58,9 @@ export default function DetailTKPage() {
     useEffect(() => {
         const fetchKomoditi = async () => {
             try {
-                const res = await fetch('/api/chart-tk', { cache: 'no-store' });
+                const params = new URLSearchParams();
+                if (uploadId) params.set('upload_id', uploadId);
+                const res = await fetch(`/api/chart-tk?${params.toString()}`, { cache: 'no-store' });
                 const json = await res.json();
                 const available = (json.komoditiSummary || [])
                     .filter((item: { name: string; value: number }) => item.value > 0)
@@ -71,19 +74,20 @@ export default function DetailTKPage() {
             }
         };
         fetchKomoditi();
-    }, [filterKomoditi]);
+    }, [filterKomoditi, uploadId]);
 
     // Fetch available bagian when komoditi changes
     useEffect(() => {
         const fetchBagian = async () => {
             const params = new URLSearchParams();
+            if (uploadId) params.append('upload_id', uploadId);
             if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
             const res = await fetch(`/api/bagian-list?${params.toString()}`);
             const json = await res.json();
             setBagianList(json.bagianList || []);
         };
         fetchBagian();
-    }, [filterKomoditi]);
+    }, [filterKomoditi, uploadId]);
 
     // Debounce search
     useEffect(() => {
@@ -99,6 +103,7 @@ export default function DetailTKPage() {
         const fetchData = async () => {
             try {
                 const params = new URLSearchParams();
+                if (uploadId) params.append('upload_id', uploadId);
                 if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
                 if (filterBagian) params.append('bagian', filterBagian);
                 if (filterGender !== 'Semua') params.append('gender', filterGender);
@@ -122,7 +127,7 @@ export default function DetailTKPage() {
         return () => {
             cancelled = true;
         };
-    }, [filterKomoditi, filterBagian, filterGender, debouncedSearch, page, queryKey]);
+    }, [uploadId, filterKomoditi, filterBagian, filterGender, debouncedSearch, page, queryKey]);
 
     // Reset page when filters change
     const handleKomoditiChange = (val: string) => {
@@ -137,6 +142,7 @@ export default function DetailTKPage() {
 
     const handleExportExcel = async () => {
         const params = new URLSearchParams();
+        if (uploadId) params.append('upload_id', uploadId);
         if (filterKomoditi !== 'Semua') params.append('komoditi', filterKomoditi);
         if (filterBagian) params.append('bagian', filterBagian);
         if (filterGender !== 'Semua') params.append('gender', filterGender);
@@ -166,7 +172,7 @@ export default function DetailTKPage() {
 
             {/* Header */}
             <div className="tk-detail-header" style={{ marginBottom: 16 }}>
-                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', textDecoration: 'none', marginBottom: 12 }}>
+                <Link href={uploadId ? `/?upload_id=${encodeURIComponent(uploadId)}` : '/'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', textDecoration: 'none', marginBottom: 12 }}>
                     <ArrowLeft size={15} /> Kembali ke Dashboard
                 </Link>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>

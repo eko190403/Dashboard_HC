@@ -165,6 +165,11 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         return 'Total HC relatif stabil dibanding upload sebelumnya.';
     }, [initialData]);
 
+    const scrollToVillageTable = () => {
+        setVillagePage(1);
+        document.getElementById('domicile-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
     const filteredVillages = useMemo(() => {
         return (initialData?.villageData ?? [])
             .filter(v => {
@@ -301,7 +306,18 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
     const otherVillagesTotal = otherDesaData.reduce((sum, village) => sum + Number(village.jumlah_tk || 0), 0);
 
-    const kpiCards = [
+    const kpiCards: {
+        label: string;
+        value: string;
+        sub: string;
+        subColor: string;
+        icon: React.ReactNode;
+        iconBg: string;
+        iconColor: string;
+        borderColor: string;
+        href?: string;
+        onClick?: () => void;
+    }[] = [
         {
             label: 'Total Headcount',
             value: initialData.totalHc.toLocaleString('id-ID'),
@@ -316,7 +332,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <Users size={20} />,
             iconBg: '#e9f0fc', iconColor: '#1e5fd4',
             borderColor: '#1e5fd4',
-            href: currentUploadId ? `/desa-lainnya?upload_id=${encodeURIComponent(String(currentUploadId))}` : undefined,
+            href: currentUploadId ? `/tk-detail?upload_id=${encodeURIComponent(String(currentUploadId))}` : '/tk-detail',
         },
         {
             label: 'Total Desa',
@@ -326,6 +342,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <MapPin size={20} />,
             iconBg: '#d1fae5', iconColor: '#0ea573',
             borderColor: '#0ea573',
+            onClick: scrollToVillageTable,
         },
         {
             label: 'Kecamatan Dominan',
@@ -335,6 +352,10 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <Map size={20} />,
             iconBg: '#ede9fe', iconColor: '#7c3aed',
             borderColor: '#7c3aed',
+            onClick: () => {
+                setFilterDistrict(initialData.dominantDistrict.name);
+                scrollToVillageTable();
+            },
         },
     ];
 
@@ -420,7 +441,20 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                 {kpiCards.map((card, i) => {
                     const cardContent = (
-                        <div key={i} className="kpi-card animate-in" style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms`, cursor: card.href ? 'pointer' : 'default' }}>
+                        <div
+                            key={i}
+                            className="kpi-card animate-in"
+                            role={card.onClick ? 'button' : undefined}
+                            tabIndex={card.onClick ? 0 : undefined}
+                            onClick={card.onClick}
+                            onKeyDown={card.onClick ? event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    card.onClick?.();
+                                }
+                            } : undefined}
+                            style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms`, cursor: card.href || card.onClick ? 'pointer' : 'default' }}
+                        >
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                                 <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#5a7184', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                     {card.label}
@@ -453,9 +487,11 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                 })}
 
                 {/* Mini HC Trend replacing Update Terakhir */}
-                <div className="kpi-card animate-in" style={{ borderTop: `3px solid #1e5fd4`, animationDelay: `180ms`, padding: 0, overflow: 'hidden' }}>
-                    <HCTrendChart variant="mini" />
-                </div>
+                <Link href="/history" aria-label="Buka riwayat upload dan tren HC" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div className="kpi-card animate-in" style={{ borderTop: `3px solid #1e5fd4`, animationDelay: `180ms`, padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
+                        <HCTrendChart variant="mini" />
+                    </div>
+                </Link>
             </div>
 
             {/* ===== EXECUTIVE INSIGHTS ===== */}
@@ -858,7 +894,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             </div>
 
             {/* ===== DATA TABLE ===== */}
-            <div className="card" style={{ overflow: 'hidden' }}>
+            <div id="domicile-table" className="card" style={{ overflow: 'hidden', scrollMarginTop: 16 }}>
                 {/* Table Header Bar */}
                 <div style={{
                     padding: '16px 20px',
