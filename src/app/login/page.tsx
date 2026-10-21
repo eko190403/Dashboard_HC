@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, FormEvent, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { hasValidSession, login } from '@/lib/auth';
@@ -85,7 +86,7 @@ export default function LoginPage() {
             boxShadow: '0 16px 40px rgba(30,95,212,0.2)',
             overflow: 'hidden',
           }}>
-            <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <Image src="/logo.png" alt="Logo PG 2 Estate" width={96} height={96} />
           </div>
           <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.025em' }}>
             Selamat Datang
@@ -147,7 +148,7 @@ export default function LoginPage() {
                 onFocus={e => { e.target.style.borderColor = '#1e5fd4'; e.target.style.boxShadow = '0 0 0 3px rgba(30,95,212,0.1)'; e.target.style.background = '#fff'; }}
                 onBlur={e => { e.target.style.borderColor = error ? '#fca5a5' : '#e2e8f0'; e.target.style.boxShadow = 'none'; e.target.style.background = '#f8fafc'; }}
               />
-              <button type="button" onClick={() => setShowPw(!showPw)} style={{
+              <button type="button" aria-label={showPw ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'} aria-pressed={showPw} onClick={() => setShowPw(!showPw)} style={{
                 position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: '#94a3b8', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 4,

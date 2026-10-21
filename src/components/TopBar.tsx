@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDown, LogOut, UserCircle2, Settings } from 'lucide-react';
 import { getUser, logout, type User } from '@/lib/auth';
@@ -96,7 +97,7 @@ export default function TopBar() {
             color: '#fff', fontSize: 13, fontWeight: 700,
             boxShadow: '0 2px 8px rgba(30,95,212,0.3)',
           }}>
-            {user.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
+            {user.avatar ? <Image src={user.avatar} alt="Foto profil" width={36} height={36} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
           </div>
 
           <ChevronDown
@@ -127,7 +128,7 @@ export default function TopBar() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontSize: 14, fontWeight: 700,
               }}>
-                {user.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
+                {user.avatar ? <Image src={user.avatar} alt="Foto profil" width={40} height={40} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : user.initials}
               </div>
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{user.name}</div>

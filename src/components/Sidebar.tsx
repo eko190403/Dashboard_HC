@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-    LayoutDashboard, History, Users, ChevronRight,
-    Wheat, CalendarRange, ChevronDown, MapPin
+    LayoutDashboard, History, Users, ChevronRight, LogOut,
+    Wheat, CalendarRange, ChevronDown, MapPin, Settings, UserCircle2
 } from 'lucide-react';
-import { getUser, type User } from '@/lib/auth';
+import { getUser, logout, type User } from '@/lib/auth';
 
 const AGE_RANGES = [
     { name: '18 – 35 Tahun', href: '/age-detail?range=18-35', color: '#1e5fd4' },
@@ -45,7 +46,10 @@ function subscribeToUserUpdates(onChange: () => void) {
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const user = useSyncExternalStore(subscribeToUserUpdates, getUserSnapshot, () => null);
+    const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+    const mobileProfileRef = useRef<HTMLDivElement>(null);
     const [ageState, setAgeState] = useState(() => ({
         pathname,
         open: pathname.startsWith('/age-detail'),
@@ -59,11 +63,42 @@ export default function Sidebar() {
     }
     const ageOpen = ageState.open;
 
+    useEffect(() => {
+        if (!mobileProfileOpen) return;
+
+        const closeOnOutsideClick = (event: PointerEvent) => {
+            if (!mobileProfileRef.current?.contains(event.target as Node)) {
+                setMobileProfileOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setMobileProfileOpen(false);
+        };
+
+        document.addEventListener('pointerdown', closeOnOutsideClick);
+        window.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutsideClick);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [mobileProfileOpen]);
+
     if (pathname === '/login') return null;
 
     const isAgeActive = pathname.startsWith('/age-detail');
     const isTKActive = pathname.startsWith('/tk-detail');
     const isDomicileActive = pathname.startsWith('/domisili');
+
+    const handleMobileLogout = async () => {
+        try {
+            await logout();
+            setMobileProfileOpen(false);
+            router.replace('/login');
+        } catch (error) {
+            console.error('Mobile logout failed:', error);
+            alert(error instanceof Error ? error.message : 'Gagal mengakhiri sesi.');
+        }
+    };
 
     const mainLinks = [
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -101,7 +136,7 @@ export default function Sidebar() {
                 <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #dde3ed' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
                         <div style={{ width: 36, height: 36, borderRadius: 9, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#fff' }}>
-                            <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            <Image src="/logo.png" alt="Logo PG 2 Estate" width={36} height={36} />
                         </div>
                         <div>
                             <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2b4a', lineHeight: 1.2 }}>HR Dashboard</div>
@@ -123,6 +158,7 @@ export default function Sidebar() {
                         return (
                             <Link key={link.href} href={link.href}
                                 style={navItemStyle(isActive)}
+                                aria-current={isActive ? 'page' : undefined}
                                 onMouseEnter={e => handleHover(e, isActive, true)}
                                 onMouseLeave={e => handleHover(e, isActive, false)}
                             >
@@ -140,6 +176,7 @@ export default function Sidebar() {
 
                     <Link href="/domisili"
                         style={navItemStyle(isDomicileActive)}
+                        aria-current={isDomicileActive ? 'page' : undefined}
                         onMouseEnter={e => handleHover(e, isDomicileActive, true)}
                         onMouseLeave={e => handleHover(e, isDomicileActive, false)}
                     >
@@ -151,6 +188,7 @@ export default function Sidebar() {
                     {/* Detail TK per Komoditi */}
                     <Link href="/tk-detail?komoditi=Semua"
                         style={navItemStyle(isTKActive)}
+                        aria-current={isTKActive ? 'page' : undefined}
                         onMouseEnter={e => handleHover(e, isTKActive, true)}
                         onMouseLeave={e => handleHover(e, isTKActive, false)}
                     >
@@ -176,8 +214,6 @@ export default function Sidebar() {
                         {ageOpen && (
                             <div style={{ paddingLeft: 14, marginBottom: 4 }}>
                                 {AGE_RANGES.map((r) => {
-                                    const isRangeActive = pathname + (typeof window !== 'undefined' ? window.location.search : '') === r.href
-                                        || (typeof window !== 'undefined' && window.location.href.includes(r.href));
                                     return (
                                         <Link key={r.href} href={r.href} style={{
                                             display: 'flex', alignItems: 'center', gap: 8,
@@ -202,7 +238,7 @@ export default function Sidebar() {
                 {/* User Footer */}
                 <div style={{ padding: '14px 16px', borderTop: '1px solid #dde3ed', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                        {user?.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
+                        {user?.avatar ? <Image src={user.avatar} alt="Foto profil" width={32} height={32} unoptimized style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
                     </div>
                     <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 12, color: '#1a2b4a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name ?? 'Admin HR'}</div>
@@ -215,15 +251,42 @@ export default function Sidebar() {
             <div className="mobile-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#fff' }}>
-                        <img src="/logo.png" alt="Logo PG 2 Estate" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        <Image src="/logo.png" alt="Logo PG 2 Estate" width={30} height={30} />
                     </div>
                     <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2b4a', lineHeight: 1.2 }}>HR Dashboard</div>
                         <div style={{ fontSize: 10, color: '#5a7184', lineHeight: 1.2 }}>PG 2 Estate</div>
                     </div>
                 </div>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #1e5fd4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-                    {user?.avatar ? <img src={user.avatar} alt="Foto profil" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
+                <div style={{ position: 'relative' }} ref={mobileProfileRef}>
+                    <button
+                        type="button"
+                        className="mobile-profile-button"
+                        aria-label={`Menu akun${user?.name ? ` ${user.name}` : ''}`}
+                        aria-expanded={mobileProfileOpen}
+                        aria-haspopup="menu"
+                        aria-controls="mobile-profile-menu"
+                        onClick={() => setMobileProfileOpen(open => !open)}
+                    >
+                        {user?.avatar ? <Image src={user.avatar} alt="" width={36} height={36} unoptimized style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : (user?.initials ?? <Users size={15} />)}
+                    </button>
+                    {mobileProfileOpen && (
+                        <div id="mobile-profile-menu" className="mobile-profile-menu" aria-label="Menu akun">
+                            <div className="mobile-profile-identity">
+                                <strong>{user?.name ?? 'Admin HR'}</strong>
+                                <span>{user?.role ?? 'People Partner'}</span>
+                            </div>
+                            <Link href="/profile" onClick={() => setMobileProfileOpen(false)}>
+                                <UserCircle2 size={16} /> Profil Saya
+                            </Link>
+                            <Link href="/settings" onClick={() => setMobileProfileOpen(false)}>
+                                <Settings size={16} /> Pengaturan
+                            </Link>
+                            <button type="button" onClick={handleMobileLogout}>
+                                <LogOut size={16} /> Keluar
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -240,7 +303,7 @@ export default function Sidebar() {
                         const Icon = link.icon;
                         const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href.split('?')[0]));
                         return (
-                            <Link key={link.href} href={link.href} className={`bottom-nav-item${isActive ? ' active' : ''}`}>
+                            <Link key={link.href} href={link.href} className={`bottom-nav-item${isActive ? ' active' : ''}`} aria-current={isActive ? 'page' : undefined}>
                                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
                                 <span>{link.name}</span>
                             </Link>

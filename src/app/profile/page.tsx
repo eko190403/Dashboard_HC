@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
+import Image from 'next/image';
 import { ArrowLeft, Camera, Check, Mail, ShieldCheck, UserCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { getUser, type User, updateUser } from '@/lib/auth';
@@ -73,7 +74,7 @@ function ProfileEditor({ user }: { user: User }) {
             <div className="profile-layout">
                 <section className="profile-hero card">
                     <div className="profile-avatar-large">
-                        {photo ? <img src={photo} alt="Foto profil" /> : user.initials}
+                        {photo ? <Image src={photo} alt="Foto profil" width={76} height={76} unoptimized /> : user.initials}
                         <label className="profile-avatar-edit" title="Ganti foto profil">
                             <Camera size={14} />
                             <input type="file" accept="image/*" onChange={handlePhotoChange} />

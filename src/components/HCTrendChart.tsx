@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid,
+    XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
 import type { TooltipContentProps } from 'recharts';
