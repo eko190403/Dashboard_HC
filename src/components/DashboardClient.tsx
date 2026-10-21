@@ -352,10 +352,12 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <Map size={20} />,
             iconBg: '#ede9fe', iconColor: '#7c3aed',
             borderColor: '#7c3aed',
-            onClick: () => {
+            onClick: initialData.dominantDistrict.name !== '-' ? () => {
+                setSearchQuery('');
+                setFilterKabupaten('All');
                 setFilterDistrict(initialData.dominantDistrict.name);
                 scrollToVillageTable();
-            },
+            } : undefined,
         },
     ];
 
