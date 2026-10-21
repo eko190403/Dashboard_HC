@@ -6,48 +6,14 @@ import {
     Tooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Label
 } from 'recharts';
-import { Search, Download, Users, MapPin, Map, Upload, FileSpreadsheet, RotateCcw } from 'lucide-react';
+import { Download, Users, MapPin, Map, Upload, FileSpreadsheet } from 'lucide-react';
 import Link from 'next/link';
 import UploadModal from './UploadModal';
 import UploadMandorModal from './UploadMandorModal';
 import TKChart from './TKChart';
 import HCTrendChart from './HCTrendChart';
 import { getEffectiveMonthLabel, getUploadMonthLabel } from '@/lib/reporting-month';
-
-interface DashboardData {
-    totalHc: number;
-    unknownDomicileCount: number | null;
-    diffHc: number;
-    diffPercent: number;
-    previousUploadDate: string | null;
-    totalVillages: number;
-    dominantDistrict: { name: string; percentage: number };
-    lastUpdated: string;
-    villageData: VillageSummary[];
-    districtData: DistrictSummary[];
-}
-
-interface VillageSummary {
-    id?: string | number;
-    nama_desa: string;
-    kecamatan: string;
-    kabupaten?: string | null;
-    jumlah_tk: number;
-    persentase: number;
-    is_grouped?: boolean;
-    jumlah_laki?: number;
-    jumlah_perempuan?: number;
-}
-
-interface DistrictSummary {
-    name: string;
-    value: number;
-}
-
-interface UploadOption {
-    id: string | number;
-    uploaded_at: string;
-}
+import type { DashboardData, UploadOption } from '@/lib/dashboard-types';
 
 interface ChartTooltipPayload {
     value: number;
@@ -73,8 +39,6 @@ interface AgeDemographicsResponse {
     data?: AgeSummary[];
     unknown?: number;
 }
-
-const VILLAGE_PAGE_SIZE = 50;
 
 const DISTRICT_COLORS = [
     '#1e5fd4', '#0ea573', '#f59e0b', '#7c3aed',
@@ -109,10 +73,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [isUploadMandorOpen, setIsUploadMandorOpen] = useState(false);
     const [justUpdated, setJustUpdated] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterDistrict, setFilterDistrict] = useState('All');
-    const [filterKabupaten, setFilterKabupaten] = useState('All');
-    const [villagePage, setVillagePage] = useState(1);
     const [filterGenderVillage, setFilterGenderVillage] = useState('All');
     const [showOtherVillages, setShowOtherVillages] = useState(false);
     const [ageData, setAgeData] = useState<AgeSummary[]>([]);
@@ -165,29 +125,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         return 'Total HC relatif stabil dibanding upload sebelumnya.';
     }, [initialData]);
 
-    const scrollToVillageTable = () => {
-        setVillagePage(1);
-        document.getElementById('domicile-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    const filteredVillages = useMemo(() => {
-        return (initialData?.villageData ?? [])
-            .filter(v => {
-                const matchSearch = v.nama_desa.toLowerCase().includes(searchQuery.toLowerCase());
-                const matchDistrict = filterDistrict === 'All' || v.kecamatan === filterDistrict;
-                const matchKabupaten = filterKabupaten === 'All'
-                    || (v.kabupaten || 'Tidak Diketahui') === filterKabupaten;
-                return matchSearch && matchDistrict && matchKabupaten;
-            })
-            .sort((a, b) => b.jumlah_tk - a.jumlah_tk);
-    }, [initialData, searchQuery, filterDistrict, filterKabupaten]);
-    const totalVillagePages = Math.max(1, Math.ceil(filteredVillages.length / VILLAGE_PAGE_SIZE));
-    const currentVillagePage = Math.min(villagePage, totalVillagePages);
-    const pagedVillages = useMemo(() => {
-        const start = (currentVillagePage - 1) * VILLAGE_PAGE_SIZE;
-        return filteredVillages.slice(start, start + VILLAGE_PAGE_SIZE);
-    }, [filteredVillages, currentVillagePage]);
-
     const genderData = useMemo(() => {
         const villageData = initialData?.villageData ?? [];
         const villages = filterGenderVillage === 'All'
@@ -231,42 +168,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         );
     }
 
-    const handleExportCSV = () => {
-        const headers = ['No', 'Nama Desa', 'Kecamatan', 'Kabupaten', 'Jumlah TK', 'Persentase (%)'];
-        const csvContent = [
-            headers.join(','),
-            ...filteredVillages.map((v, i) => `${i + 1},"${v.nama_desa}","${v.kecamatan}","${v.kabupaten || 'Tidak Diketahui'}",${v.jumlah_tk},${v.persentase}`)
-        ].join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Domisili_TK_PG2_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
-    };
-
-    const handleExportReport = async () => {
-        try {
-            const params = new URLSearchParams();
-            if (currentUploadId) params.set('upload_id', currentUploadId);
-            const response = await fetch(`/api/export-summary?${params.toString()}`);
-            if (!response.ok) {
-                const result = await response.json().catch(() => null);
-                throw new Error(result?.error || 'Gagal mengunduh ringkasan.');
-            }
-
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Ringkasan_Desa_Kecamatan_${new Date(initialData.lastUpdated).toISOString().slice(0, 10)}.xlsx`;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (error) {
-            console.error('Export summary error:', error);
-            alert(error instanceof Error ? error.message : 'Gagal mengunduh ringkasan.');
-        }
-    };
-
     const handleDownloadFullData = async () => {
         try {
             const params = new URLSearchParams();
@@ -295,8 +196,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         }
     };
 
-    const uniqueDistricts = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kecamatan))).filter(Boolean).sort()];
-    const uniqueKabupaten = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.kabupaten || 'Tidak Diketahui'))).sort()];
     const uniqueVillages = ['All', ...Array.from(new Set(initialData.villageData.map(v => v.nama_desa))).filter(Boolean).sort()];
 
     const topDesaData = initialData.villageData.filter(v => !v.is_grouped).slice(0, 10);
@@ -316,7 +215,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
         iconColor: string;
         borderColor: string;
         href?: string;
-        onClick?: () => void;
     }[] = [
         {
             label: 'Total Headcount',
@@ -342,7 +240,9 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <MapPin size={20} />,
             iconBg: '#d1fae5', iconColor: '#0ea573',
             borderColor: '#0ea573',
-            onClick: scrollToVillageTable,
+            href: currentUploadId
+                ? `/domisili?upload_id=${encodeURIComponent(String(currentUploadId))}`
+                : '/domisili',
         },
         {
             label: 'Kecamatan Dominan',
@@ -352,12 +252,12 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
             icon: <Map size={20} />,
             iconBg: '#ede9fe', iconColor: '#7c3aed',
             borderColor: '#7c3aed',
-            onClick: initialData.dominantDistrict.name !== '-' ? () => {
-                setSearchQuery('');
-                setFilterKabupaten('All');
-                setFilterDistrict(initialData.dominantDistrict.name);
-                scrollToVillageTable();
-            } : undefined,
+            href: initialData.dominantDistrict.name !== '-'
+                ? `/domisili?${new URLSearchParams({
+                    ...(currentUploadId ? { upload_id: String(currentUploadId) } : {}),
+                    kecamatan: initialData.dominantDistrict.name,
+                }).toString()}`
+                : undefined,
         },
     ];
 
@@ -446,16 +346,7 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         <div
                             key={i}
                             className="kpi-card animate-in"
-                            role={card.onClick ? 'button' : undefined}
-                            tabIndex={card.onClick ? 0 : undefined}
-                            onClick={card.onClick}
-                            onKeyDown={card.onClick ? event => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault();
-                                    card.onClick?.();
-                                }
-                            } : undefined}
-                            style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms`, cursor: card.href || card.onClick ? 'pointer' : 'default' }}
+                            style={{ borderTop: `3px solid ${card.borderColor}`, animationDelay: `${i * 60}ms`, cursor: card.href ? 'pointer' : 'default' }}
                         >
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                                 <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#5a7184', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -893,241 +784,6 @@ export default function DashboardClient({ initialData, allUploads, currentUpload
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {/* ===== DATA TABLE ===== */}
-            <div id="domicile-table" className="card" style={{ overflow: 'hidden', scrollMarginTop: 16 }}>
-                {/* Table Header Bar */}
-                <div style={{
-                    padding: '16px 20px',
-                    borderBottom: '1px solid #dde3ed',
-                }}>
-                    {/* Title row */}
-                    <div className="table-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2b4a' }}>Detail Data Domisili</h3>
-                            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>
-                                {filteredVillages.length} dari {initialData.villageData.length} desa ditampilkan
-                            </p>
-                            <p
-                                title="Termasuk desa berlabel Tidak Diketahui dan alamat kosong atau tidak valid."
-                                style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}
-                            >
-                                Domisili belum diketahui: <strong>{initialData.unknownDomicileCount === null ? 'Data tidak tersedia' : initialData.unknownDomicileCount.toLocaleString('id-ID')}</strong>{initialData.unknownDomicileCount === null ? '' : ' TK'}
-                            </p>
-                                                    <span style={{ fontSize: 12, color: '#1a2b4a', fontWeight: 500 }}>Umur tidak diketahui</span>
-                        </div>
-                    </div>
-                    {/* Controls row */}
-                    <div className="table-controls" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {/* Search */}
-                        <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
-                            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input
-                                type="text"
-                                placeholder="Cari desa..."
-                                value={searchQuery}
-                                onChange={e => {
-                                    setSearchQuery(e.target.value);
-                                    setVillagePage(1);
-                                }}
-                                className="search-input"
-                                style={{ paddingLeft: 32 }}
-                            />
-                        </div>
-                        {/* Filter */}
-                        <select
-                            value={filterKabupaten}
-                            onChange={e => {
-                                setFilterKabupaten(e.target.value);
-                                setVillagePage(1);
-                            }}
-                            className="form-select"
-                            style={{ minWidth: 170 }}
-                        >
-                            {uniqueKabupaten.map(kabupaten => (
-                                <option key={kabupaten} value={kabupaten}>
-                                    {kabupaten === 'All' ? 'Semua Kabupaten' : kabupaten}
-                                </option>
-                            ))}
-                        </select>
-                        <select
-                            value={filterDistrict}
-                            onChange={e => {
-                                setFilterDistrict(e.target.value);
-                                setVillagePage(1);
-                            }}
-                            className="form-select"
-                            style={{ minWidth: 170 }}
-                        >
-                            {uniqueDistricts.map(d => (
-                                <option key={d} value={d}>{d === 'All' ? 'Semua Kecamatan' : d}</option>
-                            ))}
-                        </select>
-                        {(searchQuery || filterDistrict !== 'All' || filterKabupaten !== 'All' || filterGenderVillage !== 'All') && (
-                            <button
-                                className="btn-secondary"
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setFilterDistrict('All');
-                                    setFilterKabupaten('All');
-                                    setFilterGenderVillage('All');
-                                    setVillagePage(1);
-                                }}
-                                title="Reset semua filter"
-                            >
-                                <RotateCcw size={14} /> Reset Filter
-                            </button>
-                        )}
-                        <button
-                            className="btn-secondary"
-                            onClick={handleExportReport}
-                            title="Export ringkasan laporan ke Excel"
-                        >
-                            <Download size={14} /> Export Excel
-                        </button>
-                        <button
-                            className="btn-secondary"
-                            onClick={handleDownloadFullData}
-                            title="Unduh file asli dengan sheet ringkasan"
-                        >
-                            <FileSpreadsheet size={14} /> Data Lengkap
-                        </button>
-                        <button
-                            className="btn-secondary"
-                            onClick={handleExportCSV}
-                            title="Export ke CSV"
-                        >
-                            <Download size={14} /> Export CSV
-                        </button>
-                    </div>
-                </div>
-
-                {/* Table */}
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th style={{ width: 48 }}>No</th>
-                                <th>Nama Desa</th>
-                                <th className="col-hide-xs">Kabupaten / City</th>
-                                <th className="col-hide-xs">Kecamatan / District</th>
-                                <th style={{ textAlign: 'right' }}>Jumlah TK</th>
-                                <th style={{ textAlign: 'right' }} className="col-hide-xs">Laki-laki</th>
-                                <th style={{ textAlign: 'right' }} className="col-hide-xs">Perempuan</th>
-                                <th style={{ textAlign: 'right' }}>Persentase (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {pagedVillages.length > 0 ? (
-                                pagedVillages.map((row, i) => {
-                                    const isGrouped = row.is_grouped;
-                                    const groupedParams = new URLSearchParams();
-                                    if (currentUploadId) groupedParams.set('upload_id', String(currentUploadId));
-                                    if (row.kabupaten) groupedParams.set('kabupaten', row.kabupaten);
-                                    const villageHref = isGrouped
-                                        ? `/desa-lainnya?${groupedParams.toString()}`
-                                        : `/desa/${encodeURIComponent(row.nama_desa)}`;
-
-                                    return (
-                                        <tr key={row.id}>
-                                            <td style={{ color: '#94a3b8', fontSize: 12 }}>{(currentVillagePage - 1) * VILLAGE_PAGE_SIZE + i + 1}</td>
-                                            <td>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    {isGrouped && <span className="badge badge-blue">Grup</span>}
-                                                    <Link
-                                                        href={villageHref}
-                                                        style={{ fontWeight: 500, color: '#1e5fd4', textDecoration: 'none' }}
-                                                        className="hover-underline"
-                                                    >
-                                                        {row.nama_desa}
-                                                    </Link>
-                                                </div>
-                                            </td>
-                                            <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kabupaten || 'Tidak Diketahui'}</td>
-                                            <td className="col-hide-xs" style={{ color: '#5a7184' }}>{row.kecamatan || '—'}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.jumlah_tk.toLocaleString('id-ID')}</td>
-                                            <td className="col-hide-xs" style={{ textAlign: 'right' }}>
-                                                <span style={{ color: '#1e5fd4', fontWeight: 600 }}>
-                                                    {(row.jumlah_laki ?? 0).toLocaleString('id-ID')}
-                                                </span>
-                                                <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 3 }}>♂</span>
-                                            </td>
-                                            <td className="col-hide-xs" style={{ textAlign: 'right' }}>
-                                                <span style={{ color: '#e11d48', fontWeight: 600 }}>
-                                                    {(row.jumlah_perempuan ?? 0).toLocaleString('id-ID')}
-                                                </span>
-                                                <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 3 }}>♀</span>
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                {(() => {
-                                                    const maxPct = Math.max(...filteredVillages.map(v => Number(v.persentase) || 0), 1);
-                                                    const barWidth = Math.min(100, (Number(row.persentase) / maxPct) * 100);
-                                                    return (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
-                                                            <span style={{ color: '#1a2b4a', fontWeight: 500, minWidth: 40 }}>
-                                                                {Number(row.persentase).toFixed(2)}%
-                                                            </span>
-                                                            <div className="progress-track">
-                                                                <div className="progress-bar" style={{ width: `${barWidth}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            ) : (
-                                <tr>
-                                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
-                                        Tidak ada data yang cocok.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Table Footer */}
-                {filteredVillages.length > 0 && (
-                    <div className="table-footer" style={{
-                        padding: '12px 20px',
-                        borderTop: '1px solid #f1f5f9',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
-                        fontSize: 12, color: '#94a3b8',
-                    }}>
-                        <span>
-                            Menampilkan <b style={{ color: '#1a2b4a' }}>
-                                {(currentVillagePage - 1) * VILLAGE_PAGE_SIZE + 1}–{Math.min(currentVillagePage * VILLAGE_PAGE_SIZE, filteredVillages.length)}
-                            </b> dari <b style={{ color: '#1a2b4a' }}>{filteredVillages.length}</b> desa
-                        </span>
-                        <div className="table-footer-stats" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                            <span>Total TK: <b style={{ color: '#1a2b4a' }}>{filteredVillages.reduce((s, v) => s + v.jumlah_tk, 0).toLocaleString('id-ID')}</b></span>
-                            <span>♂ Laki-laki: <b style={{ color: '#1e5fd4' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_laki ?? 0), 0).toLocaleString('id-ID')}</b></span>
-                            <span>♀ Perempuan: <b style={{ color: '#e11d48' }}>{filteredVillages.reduce((s, v) => s + (v.jumlah_perempuan ?? 0), 0).toLocaleString('id-ID')}</b></span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                disabled={currentVillagePage === 1}
-                                onClick={() => setVillagePage(currentVillagePage - 1)}
-                            >
-                                Sebelumnya
-                            </button>
-                            <span style={{ whiteSpace: 'nowrap' }}>Halaman {currentVillagePage} dari {totalVillagePages}</span>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                disabled={currentVillagePage === totalVillagePages}
-                                onClick={() => setVillagePage(currentVillagePage + 1)}
-                            >
-                                Selanjutnya
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
 
             <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} onSuccess={() => { setJustUpdated(true); window.location.reload(); }} />

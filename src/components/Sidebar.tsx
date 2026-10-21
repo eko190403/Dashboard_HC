@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard, History, Users, ChevronRight,
-    Wheat, CalendarRange, ChevronDown
+    Wheat, CalendarRange, ChevronDown, MapPin
 } from 'lucide-react';
 import { getUser, type User } from '@/lib/auth';
 
@@ -63,6 +63,7 @@ export default function Sidebar() {
 
     const isAgeActive = pathname.startsWith('/age-detail');
     const isTKActive = pathname.startsWith('/tk-detail');
+    const isDomicileActive = pathname.startsWith('/domisili');
 
     const mainLinks = [
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -136,6 +137,16 @@ export default function Sidebar() {
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '12px 8px 8px' }}>
                         Detail Data
                     </div>
+
+                    <Link href="/domisili"
+                        style={navItemStyle(isDomicileActive)}
+                        onMouseEnter={e => handleHover(e, isDomicileActive, true)}
+                        onMouseLeave={e => handleHover(e, isDomicileActive, false)}
+                    >
+                        <MapPin size={16} style={{ flexShrink: 0 }} />
+                        <span style={{ flex: 1 }}>Detail Data Domisili</span>
+                        {isDomicileActive && <ChevronRight size={13} />}
+                    </Link>
 
                     {/* Detail TK per Komoditi */}
                     <Link href="/tk-detail?komoditi=Semua"
@@ -221,6 +232,7 @@ export default function Sidebar() {
                 <div className="bottom-nav-inner">
                     {[
                         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+                        { name: 'Domisili', href: '/domisili', icon: MapPin },
                         { name: 'Detail TK', href: '/tk-detail?komoditi=Semua', icon: Wheat },
                         { name: 'Usia', href: '/age-detail?range=18-35', icon: CalendarRange },
                         { name: 'Riwayat', href: '/history', icon: History },
