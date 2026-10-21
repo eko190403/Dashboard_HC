@@ -4,9 +4,7 @@ export function getEffectiveReportDate(value: string | Date | null | undefined):
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  const reportDate = new Date(date);
-  reportDate.setMonth(date.getMonth() - 1);
-  return reportDate;
+  return date;
 }
 
 export function getEffectiveMonthKey(value: string | Date | null | undefined): string | null {
