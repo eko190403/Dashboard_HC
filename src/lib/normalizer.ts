@@ -26,6 +26,7 @@ export const ALIAS_MAP: Record<string, string> = {
     // Sido Rahayu
     'sido rahayu': 'Sido Rahayu',
     'sidorahayu': 'Sido Rahayu',
+    'sidorahayau': 'Sido Rahayu',
     'sido rahaju': 'Sido Rahayu',
     'campang': 'Sido Rahayu',  // per spec
 
@@ -34,8 +35,13 @@ export const ALIAS_MAP: Record<string, string> = {
     'bumiraharja': 'Bumi Raharja',
     'bumi raharjo': 'Bumi Raharja',
 
+    // Bumiharja
+    'bumi harja': 'Bumiharja',
+    'bumiharja': 'Bumiharja',
+
     // Gunung Agung
     'gunung agung': 'Gunung Agung',
+    'gunung angung': 'Gunung Agung',
     'gn agung': 'Gunung Agung',
     'gn. agung': 'Gunung Agung',
 
@@ -64,6 +70,8 @@ export const ALIAS_MAP: Record<string, string> = {
     // Lempuyang Bandar
     'lempuyang bandar': 'Lempuyang Bandar',
     'lempuyangbandar': 'Lempuyang Bandar',
+    'lempunyang bandar': 'Lempuyang Bandar',
+    'lempuang bandar': 'Lempuyang Bandar',
 
     // Buring Kencana
     'buring kencana': 'Buring Kencana',
@@ -87,6 +95,7 @@ export const ALIAS_MAP: Record<string, string> = {
 
     // Terbanggi Besar
     'terbanggi besar': 'Terbanggi Besar',
+    'terbanggia besar': 'Terbanggi Besar',
     'terbanggibesar': 'Terbanggi Besar',
 
     // Terusan Nunyai
@@ -95,6 +104,7 @@ export const ALIAS_MAP: Record<string, string> = {
 
     // Gunung Batin Udik
     'gunung batin udik': 'Gunung Batin Udik',
+    'gunung batu udik': 'Gunung Batin Udik',
     'gn batin udik': 'Gunung Batin Udik',
 
     // Talang Dua
@@ -123,6 +133,7 @@ export const ALIAS_MAP: Record<string, string> = {
 
     // Jaya Bakti
     'jaya bakti': 'Jaya Bakti',
+    'jaya bhakti': 'Jaya Bakti',
     'jayabakti': 'Jaya Bakti',
 
     // Candi Rejo
